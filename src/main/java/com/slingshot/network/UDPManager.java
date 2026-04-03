@@ -10,18 +10,30 @@ public class UDPManager {
     private int remotePort;
     private InetAddress remoteAddress;
 
-    private UDPManager() {}
+    private UDPManager() {
+    }
 
     public static UDPManager getInstance() {
-        if (instance == null) instance = new UDPManager();
+        if (instance == null)
+            instance = new UDPManager();
         return instance;
     }
 
-    // Inicializa el socket y el hilo de escucha
-    public void initialize(int localPort, String remoteIP, int remotePort) throws SocketException, UnknownHostException {
-        this.socket = new DatagramSocket(localPort);
+    public void initialize(int localPort, String remoteIP, int remotePort)
+            throws SocketException, UnknownHostException {
+        if (this.socket != null && !this.socket.isClosed()) {
+            this.socket.close();
+        }
+
+        // Cambiamos el bind complejo por uno directo que Windows entiende mejor
+        this.socket = new DatagramSocket(localPort); // Bind simple
+        this.socket.setBroadcast(true);
+
         this.remoteAddress = InetAddress.getByName(remoteIP);
         this.remotePort = remotePort;
+
+        System.out.println("[NET] Local Port: " + localPort);
+        System.out.println("[NET] Remote Destination: " + remoteIP + ":" + remotePort);
         this.startListening();
     }
 
@@ -30,33 +42,54 @@ public class UDPManager {
     }
 
     public void sendMessage(String message) {
+        // Usamos el MISMO socket que ya está abierto para recibir (esto es clave en
+        // P2P)
         new Thread(() -> {
             try {
+                if (socket == null || socket.isClosed())
+                    return;
+
                 byte[] buffer = message.getBytes();
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length, remoteAddress, remotePort);
+                DatagramPacket packet = new DatagramPacket(
+                        buffer,
+                        buffer.length,
+                        remoteAddress,
+                        remotePort);
+
                 socket.send(packet);
+                // Al usar el socket que ya hizo 'bind', Java se ve obligado a usar la misma red
+                System.out.println("[SENT] -> " + message + " to " + remoteAddress + ":" + remotePort);
+
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("[ERROR] Send failed: " + e.getMessage());
             }
         }).start();
     }
 
     private void startListening() {
-        new Thread(() -> {
-            byte[] buffer = new byte[1024];
-            while (true) {
-                try {
+        Thread listenThread = new Thread(() -> {
+            try {
+                byte[] buffer = new byte[1024];
+                System.out.println("[DEBUG] Listener thread started on port: " + socket.getLocalPort());
+
+                while (!socket.isClosed()) {
                     DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                    socket.receive(packet);
+                    socket.receive(packet); // Este es el punto donde el programa espera
+
                     String message = new String(packet.getData(), 0, packet.getLength());
-                    
+                    System.out.println("\n[DEBUG] PACKET ARRIVED: " + message);
+
                     if (observer != null) {
                         observer.onMessageReceived(message);
                     }
-                } catch (IOException e) {
-                    e.printStackTrace();
+                }
+            } catch (IOException e) {
+                if (!socket.isClosed()) {
+                    System.err.println("[ERROR] Listener error: " + e.getMessage());
                 }
             }
-        }).start();
+        });
+        listenThread.setDaemon(true); // Para que el hilo muera si cierras el programa
+        listenThread.start();
     }
 }
