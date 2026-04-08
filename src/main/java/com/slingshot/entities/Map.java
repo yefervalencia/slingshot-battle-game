@@ -2,6 +2,7 @@ package com.slingshot.entities;
 
 import java.awt.Image;
 import java.util.ArrayList;
+import java.util.List;
 
 public class Map {
     private String name;

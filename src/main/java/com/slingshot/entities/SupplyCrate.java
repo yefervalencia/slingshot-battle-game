@@ -4,14 +4,12 @@ import java.awt.Color;
 import java.awt.Graphics;
 
 public class SupplyCrate extends GameObject {
-    private int createId;
     private boolean idCollected;
     private CrateType type; // Composición con la clase de arriba
     private boolean isEnemyCrate;
 
-    public SupplyCrate(int id, int x, int y, CrateType type, boolean isEnemy) {
-        super(x, y, 40, 40); // Tamaño de la caja
-        this.createId = id;
+    public SupplyCrate(String id, int x, int y, CrateType type, boolean isEnemy) {
+        super(id, (int)x, (int)y, 40, 40); // Tamaño de la caja
         this.type = type;
         this.isEnemyCrate = isEnemy;
         this.idCollected = false;
@@ -26,9 +24,9 @@ public class SupplyCrate extends GameObject {
     public void draw(Graphics g) {
         if (!idCollected) {
             g.setColor(isEnemyCrate ? Color.ORANGE : Color.DARK_GRAY);
-            g.fillRect(x, y, width, height);
+            g.fillRect((int)x, (int)y, width, height);
             g.setColor(Color.WHITE);
-            g.drawString(type.rewardType.substring(0, 1), x + 15, y + 25);
+            g.drawString(type.rewardType.substring(0, 1), (int)x + 15, (int)y + 25);
         }
     }
 
