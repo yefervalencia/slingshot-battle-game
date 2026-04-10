@@ -7,40 +7,41 @@ import com.slingshot.core.GameEngine;
 
 public class Main {
     public static void main(String[] args) {
-        System.out.println("=== INICIANDO PRUEBA DE PATRON STATE ===");
+        System.out.println("=== SIMULACIÓN COMPLETA: HANDSHAKE -> SETUP -> PLAYING ===");
 
-        // 1. Iniciamos el motor del juego para la máquina local (Arranca en HandshakeState)
-        GameEngine localEngine = new GameEngine();
-
+        GameEngine localEngine = new GameEngine(); // Arranca en Handshake
         UDPManager pc1Manager = new UDPManager();
         UDPManager pc2Manager = new UDPManager();
 
-        // 2. Conectamos la red con el Motor usando el Observer
-        pc2Manager.addObserver(new NetworkObserver() {
-            @Override
-            public void onMessageReceived(String message) {
-                // Pasamos el mensaje al protocolo y el protocolo avisa al motor
-                NetworkProtocol.processMessage(message, localEngine);
-            }
-        });
+        pc2Manager.addObserver(message -> NetworkProtocol.processMessage(message, localEngine));
 
         pc1Manager.startListening(5000);
         pc2Manager.startListening(5001);
         try { Thread.sleep(500); } catch (InterruptedException e) {}
 
-        // --- PRUEBAS ---
-        System.out.println("\n[Main-Thread] 1. Un hacker intenta disparar ANTES de conectar...");
-        String hackMsg = NetworkProtocol.formatShoot("Artillery", 45, 90);
-        pc1Manager.send(hackMsg, "127.0.0.1", 5001);
-        try { Thread.sleep(200); } catch (InterruptedException e) {}
-
-        System.out.println("\n[Main-Thread] 2. Ahora sí, hacemos el Handshake legal...");
+        // 1. Conexión
+        System.out.println("\n[Main] -> 1. PC1 envía Handshake");
         pc1Manager.send("HANDSHAKE_OK", "127.0.0.1", 5001);
         try { Thread.sleep(200); } catch (InterruptedException e) {}
 
-        System.out.println("\n[Main-Thread] 3. PC1 envía su configuración de Setup...");
-        String setupMsg = NetworkProtocol.formatSetupPC1("Desert", "Sniper", "Yeferson");
-        pc1Manager.send(setupMsg, "127.0.0.1", 5001);
+        // 2. Setup PC1
+        System.out.println("\n[Main] -> 2. PC1 elige Mapa (Desert) y Personaje (Sniper)");
+        pc1Manager.send("SETUP_PC1;Desert_Map;Sniper;Yeferson_Host", "127.0.0.1", 5001);
+        try { Thread.sleep(200); } catch (InterruptedException e) {}
+
+        // 3. Intento de trampa
+        System.out.println("\n[Main] -> 3. PC1 intenta disparar por error/hack ANTES de que PC2 esté listo");
+        pc1Manager.send("ACTION_SHOOT;Artillery;45;100", "127.0.0.1", 5001);
+        try { Thread.sleep(200); } catch (InterruptedException e) {}
+
+        // 4. Orden final
+        System.out.println("\n[Main] -> 4. PC1 envía GAME_START");
+        pc1Manager.send("GAME_START", "127.0.0.1", 5001);
+        try { Thread.sleep(200); } catch (InterruptedException e) {}
+
+        // 5. ¡A jugar!
+        System.out.println("\n[Main] -> 5. AHORA SÍ, PC1 dispara");
+        pc1Manager.send("ACTION_SHOOT;Artillery;45;100", "127.0.0.1", 5001);
         try { Thread.sleep(500); } catch (InterruptedException e) {}
 
         pc1Manager.close(); pc2Manager.close();
