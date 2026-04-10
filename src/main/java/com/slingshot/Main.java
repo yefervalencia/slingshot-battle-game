@@ -1,64 +1,50 @@
 package com.slingshot;
 
 import com.slingshot.network.UDPManager;
-import java.util.Scanner;
+import com.slingshot.network.NetworkObserver;
+import com.slingshot.network.NetworkProtocol;
+import com.slingshot.core.GameEngine;
 
 public class Main {
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
+        System.out.println("=== SIMULACIÓN COMPLETA: HANDSHAKE -> SETUP -> PLAYING ===");
 
-        System.out.println("--- SLING-SHOT BATTLE: NETWORK TEST ---");
+        GameEngine localEngine = new GameEngine(); // Arranca en Handshake
+        UDPManager pc1Manager = new UDPManager();
+        UDPManager pc2Manager = new UDPManager();
 
-        System.out.print("Enter YOUR Local Port (e.g., 9000): ");
-        int localPort = scanner.nextInt();
+        pc2Manager.addObserver(message -> NetworkProtocol.processMessage(message, localEngine));
 
-        System.out.print("Enter REMOTE IP (e.g., 192.168.1.15): ");
-        String remoteIp = scanner.next();
+        pc1Manager.startListening(5000);
+        pc2Manager.startListening(5001);
+        try { Thread.sleep(500); } catch (InterruptedException e) {}
 
-        System.out.print("Enter REMOTE Port (e.g., 9001): ");
-        int remotePort = scanner.nextInt();
+        // 1. Conexión
+        System.out.println("\n[Main] -> 1. PC1 envía Handshake");
+        pc1Manager.send("HANDSHAKE_OK", "127.0.0.1", 5001);
+        try { Thread.sleep(200); } catch (InterruptedException e) {}
 
-        try {
-            // 1. Initialize UDP
-            // UDPManager.getInstance().initialize(localPort, remoteIp, remotePort);
-            // System.out.print("entre");
+        // 2. Setup PC1
+        System.out.println("\n[Main] -> 2. PC1 elige Mapa (Desert) y Personaje (Sniper)");
+        pc1Manager.send("SETUP_PC1;Desert_Map;Sniper;Yeferson_Host", "127.0.0.1", 5001);
+        try { Thread.sleep(200); } catch (InterruptedException e) {}
 
-            // 2. Set a simple observer to print what we receive
-            // UDPManager.getInstance().setObserver(payload -> {
-            // System.out.println("\n[RECEIVED FROM REMOTE]: " + payload);
-            // System.out.print("Type a message to send: ");
-            // });
+        // 3. Intento de trampa
+        System.out.println("\n[Main] -> 3. PC1 intenta disparar por error/hack ANTES de que PC2 esté listo");
+        pc1Manager.send("ACTION_SHOOT;Artillery;45;100", "127.0.0.1", 5001);
+        try { Thread.sleep(200); } catch (InterruptedException e) {}
 
-            // System.out.println("\nConnection initialized. Listening on port " +
-            // localPort);
+        // 4. Orden final
+        System.out.println("\n[Main] -> 4. PC1 envía GAME_START");
+        pc1Manager.send("GAME_START", "127.0.0.1", 5001);
+        try { Thread.sleep(200); } catch (InterruptedException e) {}
 
-            // 3. Loop to send messages manually
-            // while (true) {
-            // System.out.print("Type a message to send: ");
-            // String msg = scanner.next();
-            // UDPManager.getInstance().sendMessage(msg);
-            // if (msg.equalsIgnoreCase("exit")) break;
-            // }
+        // 5. ¡A jugar!
+        System.out.println("\n[Main] -> 5. AHORA SÍ, PC1 dispara");
+        pc1Manager.send("ACTION_SHOOT;Artillery;45;100", "127.0.0.1", 5001);
+        try { Thread.sleep(500); } catch (InterruptedException e) {}
 
-            // Dentro del try del Main...
-            UDPManager.getInstance().initialize(localPort, remoteIp, remotePort);
-
-            // Enviamos un mensaje de prueba automático cada 3 segundos
-            Thread autoSender = new Thread(() -> {
-                while (true) {
-                    try {
-                        String testMsg = "PING_FROM_" + localPort;
-                        UDPManager.getInstance().sendMessage(testMsg);
-                        System.out.println("[SENT] " + testMsg);
-                        Thread.sleep(3000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-            autoSender.start();
-        } catch (Exception e) {
-            System.err.println("Error initializing network: " + e.getMessage());
-        }
+        pc1Manager.close(); pc2Manager.close();
+        System.exit(0);
     }
 }
