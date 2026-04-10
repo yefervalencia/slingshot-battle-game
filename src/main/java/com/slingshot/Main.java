@@ -1,64 +1,57 @@
 package com.slingshot;
 
 import com.slingshot.network.UDPManager;
-import java.util.Scanner;
+import com.slingshot.network.NetworkObserver;
 
 public class Main {
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
+        System.out.println("=== INICIANDO PRUEBA AISLADA DE RED (UDP P2P) ===");
 
-        System.out.println("--- SLING-SHOT BATTLE: NETWORK TEST ---");
+        // 1. Instanciamos dos managers (simulando PC1 y PC2 en la misma máquina)
+        UDPManager pc1Manager = new UDPManager();
+        UDPManager pc2Manager = new UDPManager();
 
-        System.out.print("Enter YOUR Local Port (e.g., 9000): ");
-        int localPort = scanner.nextInt();
+        // 2. Aplicamos el Patrón Observer a PC2
+        // Simulamos que el "GameEngine" o la "GUI" del PC2 está escuchando los eventos de red
+        pc2Manager.addObserver(new NetworkObserver() {
+            @Override
+            public void onMessageReceived(String message) {
+                // Si esto se imprime, significa que el hilo secundario recibió el paquete
+                // y logró pasarlo correctamente a la capa superior (nuestro sistema).
+                System.out.println("[PC2-Observer] EXITO: Mensaje capturado de la red -> '" + message + "'");
+            }
+        });
 
-        System.out.print("Enter REMOTE IP (e.g., 192.168.1.15): ");
-        String remoteIp = scanner.next();
+        // 3. Iniciamos los puertos de escucha (arrancan los hilos while-running)
+        pc1Manager.startListening(5000); // PC1 escucha en puerto 5000
+        pc2Manager.startListening(5001); // PC2 escucha en puerto 5001
 
-        System.out.print("Enter REMOTE Port (e.g., 9001): ");
-        int remotePort = scanner.nextInt();
-
+        // Pausa táctica de 500ms. 
+        // Como los Sockets levantan en hilos paralelos (Threads), les damos tiempo para 
+        // abrir los puertos en el Sistema Operativo antes de disparar paquetes.
         try {
-            // 1. Initialize UDP
-            // UDPManager.getInstance().initialize(localPort, remoteIp, remotePort);
-            // System.out.print("entre");
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 
-            // 2. Set a simple observer to print what we receive
-            // UDPManager.getInstance().setObserver(payload -> {
-            // System.out.println("\n[RECEIVED FROM REMOTE]: " + payload);
-            // System.out.print("Type a message to send: ");
-            // });
+        // 4. PC1 envía un mensaje de prueba a PC2
+        System.out.println("\n[Main-Thread] Ordenando a PC1 que envíe un paquete a PC2...");
+        // Como ambos están en la misma máquina, usamos localhost (127.0.0.1)
+        pc1Manager.send("HANDSHAKE_OK;Soy_El_Master", "127.0.0.1", 5001);
 
-            // System.out.println("\nConnection initialized. Listening on port " +
-            // localPort);
-
-            // 3. Loop to send messages manually
-            // while (true) {
-            // System.out.print("Type a message to send: ");
-            // String msg = scanner.next();
-            // UDPManager.getInstance().sendMessage(msg);
-            // if (msg.equalsIgnoreCase("exit")) break;
-            // }
-
-            // Dentro del try del Main...
-            UDPManager.getInstance().initialize(localPort, remoteIp, remotePort);
-
-            // Enviamos un mensaje de prueba automático cada 3 segundos
-            Thread autoSender = new Thread(() -> {
-                while (true) {
-                    try {
-                        String testMsg = "PING_FROM_" + localPort;
-                        UDPManager.getInstance().sendMessage(testMsg);
-                        System.out.println("[SENT] " + testMsg);
-                        Thread.sleep(3000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-            autoSender.start();
-        } catch (Exception e) {
-            System.err.println("Error initializing network: " + e.getMessage());
+        // 5. Mantenemos el programa vivo unos segundos para observar el asincronismo y luego limpiamos
+        try {
+            Thread.sleep(2000);
+            System.out.println("\n=== CERRANDO CONEXIONES Y APAGANDO ===");
+            pc1Manager.close();
+            pc2Manager.close();
+            
+            // Pausa breve para ver los mensajes de cierre en consola
+            Thread.sleep(500); 
+            System.exit(0);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 }
