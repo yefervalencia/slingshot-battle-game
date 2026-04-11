@@ -13,18 +13,21 @@ import javafx.scene.image.Image;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
+import java.io.InputStream;
 import java.net.InetAddress;
 
 public class LobbyWindow {
 
+    public interface OnConnectListener {
+        void onConnect(String targetIp, int targetPort, boolean isHost);
+    }
+
     private UDPManager udpManager;
     private GameEngine gameEngine;
     private OnConnectListener connectListener;
-    private volatile boolean isLobbyActive = true;
 
-    public void stopLobby() {
-        this.isLobbyActive = false;
-    }
+    // Variable para controlar el latido de red
+    private volatile boolean isLobbyActive = true;
 
     public LobbyWindow(UDPManager udpManager, GameEngine gameEngine) {
         this.udpManager = udpManager;
@@ -35,26 +38,32 @@ public class LobbyWindow {
         this.connectListener = listener;
     }
 
+    public void stopLobby() {
+        this.isLobbyActive = false;
+    }
+
     public void display(Stage primaryStage) {
         primaryStage.setTitle("Sling-Shot Battle v2.0 - Conexión P2P");
-
         StackPane root = new StackPane();
 
-        // Carga de la imagen
+        // 1. Carga de Imagen A Prueba de Fallos
         try {
-            Image bgImage = new Image(getClass().getResourceAsStream("/assets/lobby_bg.png"));
-            BackgroundImage background = new BackgroundImage(
-                    bgImage, BackgroundRepeat.NO_REPEAT, BackgroundRepeat.NO_REPEAT,
-                    BackgroundPosition.CENTER,
-                    new BackgroundSize(BackgroundSize.AUTO, BackgroundSize.AUTO, false, false, true, true));
-            root.setBackground(new Background(background));
+            InputStream is = getClass().getResourceAsStream("/assets/lobby_bg.png");
+            if (is != null) {
+                Image bgImage = new Image(is);
+                BackgroundImage background = new BackgroundImage(
+                        bgImage, BackgroundRepeat.NO_REPEAT, BackgroundRepeat.NO_REPEAT,
+                        BackgroundPosition.CENTER,
+                        new BackgroundSize(BackgroundSize.AUTO, BackgroundSize.AUTO, false, false, true, true));
+                root.setBackground(new Background(background));
+            } else {
+                root.setStyle("-fx-background-color: #2b2b2b;");
+            }
         } catch (Exception e) {
-            System.err.println(
-                    "Advertencia: No se encontró la imagen de fondo en /assets/lobby_bg.png. Usando fondo sólido.");
             root.setStyle("-fx-background-color: #2b2b2b;");
         }
 
-        // Títulos e inputs
+        // 2. Elementos Gráficos
         Label lblTitle = new Label("SALA DE CONEXIÓN");
         lblTitle.setStyle(
                 "-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: white; -fx-effect: dropshadow( gaussian , rgba(0,0,0,0.8) , 5,0,0,2 );");
@@ -64,10 +73,8 @@ public class LobbyWindow {
 
         TextField txtLocalPort = new TextField("5000");
         txtLocalPort.setMaxWidth(200);
-
         TextField txtRemoteIp = new TextField("127.0.0.1");
         txtRemoteIp.setMaxWidth(200);
-
         TextField txtRemotePort = new TextField("5001");
         txtRemotePort.setMaxWidth(200);
 
@@ -75,7 +82,6 @@ public class LobbyWindow {
         btnConnect.setStyle(
                 "-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20 10 20;");
 
-        // Panel semitransparente
         VBox controls = new VBox(10);
         controls.setPadding(new Insets(30));
         controls.setAlignment(Pos.CENTER);
@@ -85,15 +91,13 @@ public class LobbyWindow {
 
         Label lblDatosRival = new Label("--- DATOS DEL RIVAL ---");
         lblDatosRival.setStyle("-fx-text-fill: #f1c40f; -fx-font-weight: bold;");
-
-        Label lbl1 = new Label("Puerto de Escucha Local:");
+        Label lbl1 = new Label("Puerto Local:");
         lbl1.setStyle("-fx-text-fill: white;");
         Label lbl2 = new Label("IP Remota:");
         lbl2.setStyle("-fx-text-fill: white;");
         Label lbl3 = new Label("Puerto Remoto:");
         lbl3.setStyle("-fx-text-fill: white;");
 
-        // --- NUEVO SELECTOR DE ROL ---
         ComboBox<String> cbRol = new ComboBox<>();
         cbRol.getItems().addAll("Soy el HOST (Creo la partida)", "Soy el CLIENTE (Me uno)");
         cbRol.setValue("Soy el HOST (Creo la partida)");
@@ -102,39 +106,31 @@ public class LobbyWindow {
         Label lblRol = new Label("Selecciona tu Rol:");
         lblRol.setStyle("-fx-text-fill: #f1c40f; -fx-font-weight: bold;");
 
-        // Ensamblaje seguro sin duplicados
         controls.getChildren().addAll(
-                lblTitle, lblMiIP,
-                lbl1, txtLocalPort,
-                lblDatosRival,
-                lbl2, txtRemoteIp,
-                lbl3, txtRemotePort,
-                new Label(""), // Espaciador
-                lblRol, cbRol,
-                new Label(""), // Espaciador
-                btnConnect);
+                lblTitle, lblMiIP, lbl1, txtLocalPort, lblDatosRival, lbl2, txtRemoteIp, lbl3, txtRemotePort,
+                new Label(""), lblRol, cbRol, new Label(""), btnConnect);
 
+        // 3. Acción del Botón y Latido
         btnConnect.setOnAction(e -> {
             try {
                 int localPort = Integer.parseInt(txtLocalPort.getText());
                 int remotePort = Integer.parseInt(txtRemotePort.getText());
                 String remoteIp = txtRemoteIp.getText();
-
-                // Leemos el rol
                 boolean soyHost = cbRol.getValue().contains("HOST");
 
                 udpManager.startListening(localPort);
 
-                // Solo el Host dispara el Handshake, el cliente espera
                 if (soyHost) {
-                    // MÁQUINA DE PULSOS: El Host ruega por conexión hasta que el Cliente despierte
                     Thread handshakeThread = new Thread(() -> {
                         while (isLobbyActive) {
                             udpManager.send("HANDSHAKE_OK", remoteIp, remotePort);
-                            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException ignored) {
+                            }
                         }
                     });
-                    handshakeThread.setDaemon(true); // Se cierra si cerramos el juego
+                    handshakeThread.setDaemon(true);
                     handshakeThread.start();
                 }
 
@@ -146,13 +142,12 @@ public class LobbyWindow {
                 cbRol.setDisable(true);
                 btnConnect.setText(soyHost ? "ESPERANDO AL CLIENTE..." : "ESPERANDO HANDSHAKE...");
             } catch (NumberFormatException ex) {
-                System.err.println("Error: Los puertos deben ser números.");
+                System.err.println("Error: Puertos inválidos.");
             }
         });
 
         root.getChildren().add(controls);
-
-        Scene scene = new Scene(root, 1080, 720);
+        Scene scene = new Scene(root, 1280, 720);
         primaryStage.setScene(scene);
         primaryStage.show();
     }

@@ -90,7 +90,7 @@ public class SetupWindow {
       }
     });
 
-    return new Scene(layout, 800, 600);
+    return new Scene(layout, 1280, 720);
   }
 
   // --- EL MÉTODO MÁGICO PARA ACTUALIZAR AL CLIENTE ---

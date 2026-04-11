@@ -17,79 +17,81 @@ public class AppFX extends Application {
   private UDPManager udpManager;
   private GameEngine gameEngine;
   private SetupWindow currentSetupWindow;
+  private LobbyWindow lobbyWindow;
 
   private String lastTargetIp = "127.0.0.1";
   private int lastTargetPort = 5001;
   private boolean isHost = false;
-
-  private LobbyWindow lobbyWindow; // Para poder apagar su latido
-  private boolean handshakeComplete = false; // Para evitar responder ecos infinitos
+  private boolean handshakeComplete = false;
 
   @Override
   public void start(Stage primaryStage) {
-    udpManager = new UDPManager();
-    gameEngine = new GameEngine();
+    try { // <- BLOQUE DE PROTECCIÓN ACTIVO
+      udpManager = new UDPManager();
+      gameEngine = new GameEngine();
 
-    gameEngine.setNetworkSender(message -> {
-      udpManager.send(message, lastTargetIp, lastTargetPort);
-    });
+      gameEngine.setNetworkSender(message -> {
+        udpManager.send(message, lastTargetIp, lastTargetPort);
+      });
 
-    udpManager.addObserver(message -> {
-      Platform.runLater(() -> {
-        NetworkProtocol.processMessage(message, gameEngine);
+      udpManager.addObserver(message -> {
+        Platform.runLater(() -> {
+          NetworkProtocol.processMessage(message, gameEngine);
 
-        // El cliente confirma la conexión devolviendo el Handshake (Solo 1 vez)
-                if (message.equals("HANDSHAKE_OK") && !isHost && !handshakeComplete) {
-                    System.out.println("[AppFX] -> Handshake recibido del HOST. Confirmando conexión...");
-                    udpManager.send("HANDSHAKE_OK", lastTargetIp, lastTargetPort);
-                    handshakeComplete = true; // Bloqueamos ecos futuros del Host
-                }
+          if (message.equals("HANDSHAKE_OK") && !isHost && !handshakeComplete) {
+            System.out.println("[AppFX] -> Handshake recibido del HOST. Confirmando...");
+            udpManager.send("HANDSHAKE_OK", lastTargetIp, lastTargetPort);
+            handshakeComplete = true;
+          }
 
-        // El cliente procesa los datos del Host
-        if (message.startsWith("SETUP_PC1") && !isHost && currentSetupWindow != null) {
-          String[] tokens = message.split(";");
-          String mapName = tokens[1];
-          String hostChar = tokens[2];
-          currentSetupWindow.receiveHostData(mapName, hostChar);
+          if (message.startsWith("SETUP_PC1") && !isHost && currentSetupWindow != null) {
+            String[] tokens = message.split(";");
+            String mapName = tokens[1];
+            String hostChar = tokens[2];
+            currentSetupWindow.receiveHostData(mapName, hostChar);
+          }
+        });
+      });
+
+      gameEngine.setOnStateChangeListener(newState -> {
+        if (newState instanceof SetupState) {
+          if (lobbyWindow != null)
+            lobbyWindow.stopLobby(); // Apagamos latido
+          handshakeComplete = true;
+
+          Platform.runLater(() -> {
+            currentSetupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
+            primaryStage.setScene(currentSetupWindow.createScene());
+          });
+        } else if (newState instanceof com.slingshot.core.states.PlayingState) {
+          Platform.runLater(() -> {
+            GameWindow gameWindow = new GameWindow(gameEngine);
+            primaryStage.setScene(gameWindow.createScene());
+            primaryStage.centerOnScreen();
+          });
         }
       });
-    });
 
-    gameEngine.setOnStateChangeListener(newState -> {
-      if (newState instanceof SetupState) {
-                // APAGAMOS EL LATIDO DEL HOST
-                if (lobbyWindow != null) lobbyWindow.stopLobby(); 
-                handshakeComplete = true; 
+      lobbyWindow = new LobbyWindow(udpManager, gameEngine);
+      lobbyWindow.setOnConnectAction((ip, port, rolSeleccionado) -> {
+        this.lastTargetIp = ip;
+        this.lastTargetPort = port;
+        this.isHost = rolSeleccionado;
+      });
 
-                Platform.runLater(() -> {
-                    currentSetupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
-                    primaryStage.setScene(currentSetupWindow.createScene());
-                });
-      } else if (newState instanceof com.slingshot.core.states.PlayingState) {
-        Platform.runLater(() -> {
-          GameWindow gameWindow = new GameWindow(gameEngine);
-          primaryStage.setScene(gameWindow.createScene());
-          primaryStage.centerOnScreen();
-        });
-      }
-    });
+      lobbyWindow.display(primaryStage);
 
-    LobbyWindow lobby = new LobbyWindow(udpManager, gameEngine);
-
-    lobbyWindow.setOnConnectAction((ip, port, rolSeleccionado) -> {
-      this.lastTargetIp = ip;
-      this.lastTargetPort = port;
-      this.isHost = rolSeleccionado;
-    });
-
-    lobby.display(primaryStage);
+    } catch (Exception e) {
+      // SI FALLA, AHORA SÍ NOS DIRÁ EL POR QUÉ
+      System.err.println("=== ERROR GRAVE AL INICIAR LA INTERFAZ ===");
+      e.printStackTrace();
+    }
   }
 
   @Override
   public void stop() {
-    if (udpManager != null) {
+    if (udpManager != null)
       udpManager.close();
-    }
     System.exit(0);
   }
 

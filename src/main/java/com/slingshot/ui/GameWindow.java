@@ -32,7 +32,7 @@ public class GameWindow {
         };
         timer.start();
 
-        return new Scene(root, 1000, 600);
+        return new Scene(root, 1280, 720);
     }
 
     private void render() {
