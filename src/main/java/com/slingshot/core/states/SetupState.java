@@ -17,13 +17,16 @@ public class SetupState implements GameState {
                 break;
 
             case "READY_PC2":
-                // Escenario: Somos PC1 y el PC2 nos confirma que ya eligió
+                // Escenario: Somos PC1 (Host) y el PC2 nos confirma que ya eligió
                 String pc2Char = tokens[1];
                 String pc2Name = tokens[2];
                 System.out.println("[State: Setup] -> El CLIENTE (" + pc2Name + ") eligió a " + pc2Char + " y está listo.");
-                System.out.println("[State: Setup] -> INFO: Preparando transición al juego...");
+                System.out.println("[State: Setup] -> INFO: Dando la orden de inicio global...");
                 
-                // ¡PC1 cambia al estado de juego! (En la integración real, aquí PC1 mandará automáticamente el GAME_START por la red)
+                // 1. Enviamos el token oficial a la red para que el Cliente avance
+                engine.sendNetworkMessage("GAME_START");
+                
+                // 2. Nosotros también avanzamos al juego
                 engine.setState(new PlayingState());
                 break;
 

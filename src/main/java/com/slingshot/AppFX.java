@@ -1,52 +1,89 @@
 package com.slingshot;
 
 import com.slingshot.core.GameEngine;
+import com.slingshot.core.states.SetupState;
 import com.slingshot.network.NetworkObserver;
 import com.slingshot.network.NetworkProtocol;
 import com.slingshot.network.UDPManager;
+import com.slingshot.ui.GameWindow;
 import com.slingshot.ui.LobbyWindow;
+import com.slingshot.ui.SetupWindow;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
 
 public class AppFX extends Application {
 
-    private UDPManager udpManager;
-    private GameEngine gameEngine;
+  private UDPManager udpManager;
+  private GameEngine gameEngine;
 
-    @Override
-    public void start(Stage primaryStage) {
-        // Inicializamos el "Backend"
-        udpManager = new UDPManager();
-        gameEngine = new GameEngine();
+  // Variables temporales para saber a dónde disparar el siguiente paquete
+  private String lastTargetIp = "127.0.0.1";
+  private int lastTargetPort = 5001;
+  private boolean isHost = false;
 
-        // Conectamos el Observer
-        udpManager.addObserver(new NetworkObserver() {
-            @Override
-            public void onMessageReceived(String message) {
-                // IMPORTANTE: Como la red corre en un hilo secundario y JavaFX en su propio hilo principal,
-                // debemos usar Platform.runLater para evitar que la UI colapse al recibir un paquete.
-                Platform.runLater(() -> {
-                    NetworkProtocol.processMessage(message, gameEngine);
-                });
-            }
-        });
+  @Override
+  public void start(Stage primaryStage) {
+    udpManager = new UDPManager();
+    gameEngine = new GameEngine();
 
-        // Mostramos la interfaz
-        LobbyWindow lobby = new LobbyWindow(udpManager, gameEngine);
-        lobby.display(primaryStage);
-    }
+    // Puente para que el Engine pueda enviar mensajes sin conocer el UDPManager
+    gameEngine.setNetworkSender(message -> {
+      udpManager.send(message, lastTargetIp, lastTargetPort);
+    });
 
-    @Override
-    public void stop() {
-        // Apagado seguro al cerrar la ventana
-        if (udpManager != null) {
-            udpManager.close();
+    // 1. Observer de Red
+    udpManager.addObserver(message -> {
+      Platform.runLater(() -> {
+        NetworkProtocol.processMessage(message, gameEngine);
+
+        // Si recibimos un Handshake y no habíamos enviado nada, asumimos el rol de
+        // Cliente
+        if (message.equals("HANDSHAKE_OK") && !isHost) {
+          System.out.println("[AppFX] -> Asumiendo rol de CLIENTE.");
         }
-        System.out.println("Juego cerrado limpiamente.");
-    }
+      });
+    });
 
-    public static void main(String[] args) {
-        launch(args);
-    }
+    // 2. Observer de Estado de Juego (MAGIA UI)
+    gameEngine.setOnStateChangeListener(newState -> {
+      if (newState instanceof SetupState) {
+        Platform.runLater(() -> {
+          SetupWindow setupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
+          primaryStage.setScene(setupWindow.createScene());
+        });
+      } else if (newState instanceof com.slingshot.core.states.PlayingState) {
+        // NUEVO: Transición al lienzo del juego
+        Platform.runLater(() -> {
+          GameWindow gameWindow = new GameWindow(gameEngine);
+          primaryStage.setScene(gameWindow.createScene());
+          primaryStage.centerOnScreen();
+        });
+      }
+    });
+
+    // 3. Modificamos ligeramente la creación del Lobby para interceptar los datos
+    // de conexión
+    LobbyWindow lobby = new LobbyWindow(udpManager, gameEngine);
+    // Le pasamos un callback para atrapar la IP/Puerto cuando el usuario da click
+    // en Conectar
+    lobby.setOnConnectAction((ip, port) -> {
+      this.lastTargetIp = ip;
+      this.lastTargetPort = port;
+      this.isHost = true; // Si yo fui el que dio click a conectar, yo soy el Host.
+    });
+
+    lobby.display(primaryStage);
+  }
+
+  @Override
+  public void stop() {
+    if (udpManager != null)
+      udpManager.close();
+    System.exit(0);
+  }
+
+  public static void main(String[] args) {
+    launch(args);
+  }
 }

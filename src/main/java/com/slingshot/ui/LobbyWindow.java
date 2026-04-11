@@ -15,6 +15,7 @@ import javafx.stage.Stage;
 import java.net.InetAddress;
 
 public class LobbyWindow {
+    private OnConnectListener connectListener;
 
     private UDPManager udpManager;
     private GameEngine gameEngine;
@@ -39,17 +40,18 @@ public class LobbyWindow {
                     BackgroundRepeat.NO_REPEAT,
                     BackgroundRepeat.NO_REPEAT,
                     BackgroundPosition.CENTER,
-                    new BackgroundSize(BackgroundSize.AUTO, BackgroundSize.AUTO, false, false, true, true)
-            );
+                    new BackgroundSize(BackgroundSize.AUTO, BackgroundSize.AUTO, false, false, true, true));
             root.setBackground(new Background(background));
         } catch (Exception e) {
-            System.err.println("Advertencia: No se encontró la imagen de fondo en /assets/lobby_bg.png. Usando fondo sólido.");
+            System.err.println(
+                    "Advertencia: No se encontró la imagen de fondo en /assets/lobby_bg.png. Usando fondo sólido.");
             root.setStyle("-fx-background-color: #2b2b2b;"); // Fondo oscuro de respaldo
         }
 
         // 3. Elementos de la UI
         Label lblTitle = new Label("SALA DE CONEXIÓN");
-        lblTitle.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: white; -fx-effect: dropshadow( gaussian , rgba(0,0,0,0.8) , 5,0,0,2 );");
+        lblTitle.setStyle(
+                "-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: white; -fx-effect: dropshadow( gaussian , rgba(0,0,0,0.8) , 5,0,0,2 );");
 
         Label lblMiIP = new Label("Tu IP Local: " + getLocalIP());
         lblMiIP.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
@@ -64,7 +66,8 @@ public class LobbyWindow {
         txtRemotePort.setMaxWidth(200);
 
         Button btnConnect = new Button("CONECTAR E INICIAR");
-        btnConnect.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20 10 20;");
+        btnConnect.setStyle(
+                "-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20 10 20;");
 
         // 4. Panel de controles semi-transparente
         VBox controls = new VBox(10);
@@ -73,24 +76,27 @@ public class LobbyWindow {
         controls.setMaxWidth(300);
         controls.setMaxHeight(400);
         // Fondo negro semi-transparente para que el texto se lea sobre la imagen
-        //controls.setStyle("-fx-background-color: rgba(0, 0, 0, 0.7); -fx-background-radius: 10;");
+        // controls.setStyle("-fx-background-color: rgba(0, 0, 0, 0.7);
+        // -fx-background-radius: 10;");
 
         Label lblDatosRival = new Label("--- DATOS DEL RIVAL ---");
         lblDatosRival.setStyle("-fx-text-fill: #f1c40f; -fx-font-weight: bold;");
 
-        Label lbl1 = new Label("Puerto de Escucha Local:"); lbl1.setStyle("-fx-text-fill: white;");
-        Label lbl2 = new Label("IP Remota:"); lbl2.setStyle("-fx-text-fill: white;");
-        Label lbl3 = new Label("Puerto Remoto:"); lbl3.setStyle("-fx-text-fill: white;");
+        Label lbl1 = new Label("Puerto de Escucha Local:");
+        lbl1.setStyle("-fx-text-fill: white;");
+        Label lbl2 = new Label("IP Remota:");
+        lbl2.setStyle("-fx-text-fill: white;");
+        Label lbl3 = new Label("Puerto Remoto:");
+        lbl3.setStyle("-fx-text-fill: white;");
 
         controls.getChildren().addAll(
-                lblTitle, lblMiIP, 
+                lblTitle, lblMiIP,
                 lbl1, txtLocalPort,
-                lblDatosRival, 
-                lbl2, txtRemoteIp, 
-                lbl3, txtRemotePort, 
+                lblDatosRival,
+                lbl2, txtRemoteIp,
+                lbl3, txtRemotePort,
                 new Label(""), // Espaciador
-                btnConnect
-        );
+                btnConnect);
 
         // 5. Lógica del Botón
         btnConnect.setOnAction(e -> {
@@ -101,7 +107,9 @@ public class LobbyWindow {
 
                 udpManager.startListening(localPort);
                 udpManager.send("HANDSHAKE_OK", remoteIp, remotePort);
-                
+
+                if (connectListener != null) connectListener.onConnect(remoteIp, remotePort);
+
                 btnConnect.setDisable(true);
                 btnConnect.setText("ESPERANDO RIVAL...");
             } catch (NumberFormatException ex) {
@@ -124,4 +132,6 @@ public class LobbyWindow {
             return "Desconocida";
         }
     }
+
+    public void setOnConnectAction(OnConnectListener listener) { this.connectListener = listener; }
 }
