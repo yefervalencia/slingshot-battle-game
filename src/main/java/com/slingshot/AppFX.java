@@ -36,13 +36,14 @@ public class AppFX extends Application {
 
       udpManager.addObserver(message -> {
         Platform.runLater(() -> {
-          NetworkProtocol.processMessage(message, gameEngine);
 
           if (message.equals("HANDSHAKE_OK") && !isHost && !handshakeComplete) {
             System.out.println("[AppFX] -> Handshake recibido del HOST. Confirmando...");
             udpManager.send("HANDSHAKE_OK", lastTargetIp, lastTargetPort);
             handshakeComplete = true;
           }
+          
+          NetworkProtocol.processMessage(message, gameEngine);
 
           if (message.startsWith("SETUP_PC1") && !isHost && currentSetupWindow != null) {
             String[] tokens = message.split(";");
