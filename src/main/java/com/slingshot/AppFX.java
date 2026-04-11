@@ -41,8 +41,10 @@ public class AppFX extends Application {
              NetworkProtocol.processMessage(message, gameEngine);
 
              if (message.equals("HANDSHAKE_OK") && !isHost) {
-                  System.out.println("[AppFX] -> Asumiendo rol de CLIENTE.");
-             }
+                    System.out.println("[AppFX] -> Handshake recibido del HOST. Confirmando conexión...");
+                    // El Cliente DEBE responder el Handshake para que el Host sepa que llegó
+                    udpManager.send("HANDSHAKE_OK", lastTargetIp, lastTargetPort);
+                }
 
              // NUEVO: Interceptar el paquete del Host para actualizar la GUI del Cliente
              if (message.startsWith("SETUP_PC1") && !isHost && currentSetupWindow != null) {
@@ -75,14 +77,14 @@ public class AppFX extends Application {
     // de conexión
     LobbyWindow lobby = new LobbyWindow(udpManager, gameEngine);
     // Le pasamos un callback para atrapar la IP/Puerto cuando el usuario da click
-    // en Conectar
-    lobby.setOnConnectAction((ip, port) -> {
-      this.lastTargetIp = ip;
-      this.lastTargetPort = port;
-      this.isHost = true; // Si yo fui el que dio click a conectar, yo soy el Host.
-    });
+    // en Conectar    
+        lobby.setOnConnectAction((ip, port, rolSeleccionado) -> {
+            this.lastTargetIp = ip;
+            this.lastTargetPort = port;
+            this.isHost = rolSeleccionado; // Ahora el rol lo define el ComboBox, no el clic
+        });
 
-    lobby.display(primaryStage);
+        lobby.display(primaryStage);
   }
 
   @Override

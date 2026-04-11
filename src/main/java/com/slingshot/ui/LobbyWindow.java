@@ -6,6 +6,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
@@ -98,20 +99,49 @@ public class LobbyWindow {
                 new Label(""), // Espaciador
                 btnConnect);
 
+        // --- CÓDIGO A REEMPLAZAR EN LOBBYWINDOW ---
+        ComboBox<String> cbRol = new ComboBox<>();
+        cbRol.getItems().addAll("Soy el HOST (Creo la partida)", "Soy el CLIENTE (Me uno)");
+        cbRol.setValue("Soy el HOST (Creo la partida)");
+        cbRol.setStyle("-fx-font-weight: bold;");
+
+        Label lblRol = new Label("Selecciona tu Rol:");
+        lblRol.setStyle("-fx-text-fill: #f1c40f; -fx-font-weight: bold;");
+
+        controls.getChildren().addAll(
+                lblTitle, lblMiIP,
+                lbl1, txtLocalPort,
+                lblDatosRival,
+                lbl2, txtRemoteIp,
+                lbl3, txtRemotePort,
+                new Label(""), // Espaciador
+                lblRol, cbRol, // NUESTRO NUEVO SELECTOR
+                new Label(""), // Espaciador
+                btnConnect);
+
         // 5. Lógica del Botón
+        // 5. Lógica del Botón Modificada
         btnConnect.setOnAction(e -> {
             try {
                 int localPort = Integer.parseInt(txtLocalPort.getText());
                 int remotePort = Integer.parseInt(txtRemotePort.getText());
                 String remoteIp = txtRemoteIp.getText();
+                boolean soyHost = cbRol.getValue().contains("HOST");
 
                 udpManager.startListening(localPort);
-                udpManager.send("HANDSHAKE_OK", remoteIp, remotePort);
 
-                if (connectListener != null) connectListener.onConnect(remoteIp, remotePort);
+                // Solo el Host dispara el Handshake primero. El cliente solo escucha y responde.
+                if (soyHost) {
+                    udpManager.send("HANDSHAKE_OK", remoteIp, remotePort);
+                }
+                
+                if (connectListener != null) {
+                    connectListener.onConnect(remoteIp, remotePort, soyHost);
+                }
 
                 btnConnect.setDisable(true);
-                btnConnect.setText("ESPERANDO RIVAL...");
+                cbRol.setDisable(true);
+                btnConnect.setText(soyHost ? "ESPERANDO AL CLIENTE..." : "ESPERANDO HANDSHAKE DEL HOST...");
             } catch (NumberFormatException ex) {
                 System.err.println("Error: Los puertos deben ser números.");
             }
@@ -133,5 +163,7 @@ public class LobbyWindow {
         }
     }
 
-    public void setOnConnectAction(OnConnectListener listener) { this.connectListener = listener; }
+    public void setOnConnectAction(OnConnectListener listener) {
+        this.connectListener = listener;
+    }
 }
