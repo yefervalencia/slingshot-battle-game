@@ -12,85 +12,84 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
 
-
-
 public class AppFX extends Application {
 
   private UDPManager udpManager;
   private GameEngine gameEngine;
   private SetupWindow currentSetupWindow;
 
-  // Variables temporales para saber a dónde disparar el siguiente paquete
   private String lastTargetIp = "127.0.0.1";
   private int lastTargetPort = 5001;
   private boolean isHost = false;
+
+  private LobbyWindow lobbyWindow; // Para poder apagar su latido
+  private boolean handshakeComplete = false; // Para evitar responder ecos infinitos
 
   @Override
   public void start(Stage primaryStage) {
     udpManager = new UDPManager();
     gameEngine = new GameEngine();
 
-    // Puente para que el Engine pueda enviar mensajes sin conocer el UDPManager
     gameEngine.setNetworkSender(message -> {
       udpManager.send(message, lastTargetIp, lastTargetPort);
     });
 
-   // 1. Observer de Red
-     udpManager.addObserver(message -> {
-         Platform.runLater(() -> {
-             NetworkProtocol.processMessage(message, gameEngine);
+    udpManager.addObserver(message -> {
+      Platform.runLater(() -> {
+        NetworkProtocol.processMessage(message, gameEngine);
 
-             if (message.equals("HANDSHAKE_OK") && !isHost) {
+        // El cliente confirma la conexión devolviendo el Handshake (Solo 1 vez)
+                if (message.equals("HANDSHAKE_OK") && !isHost && !handshakeComplete) {
                     System.out.println("[AppFX] -> Handshake recibido del HOST. Confirmando conexión...");
-                    // El Cliente DEBE responder el Handshake para que el Host sepa que llegó
                     udpManager.send("HANDSHAKE_OK", lastTargetIp, lastTargetPort);
+                    handshakeComplete = true; // Bloqueamos ecos futuros del Host
                 }
 
-             // NUEVO: Interceptar el paquete del Host para actualizar la GUI del Cliente
-             if (message.startsWith("SETUP_PC1") && !isHost && currentSetupWindow != null) {
-                 String[] tokens = message.split(";");
-                 String mapName = tokens[1];
-                 String hostChar = tokens[2];
-                 currentSetupWindow.receiveHostData(mapName, hostChar);
-             }
-         });
-     });
+        // El cliente procesa los datos del Host
+        if (message.startsWith("SETUP_PC1") && !isHost && currentSetupWindow != null) {
+          String[] tokens = message.split(";");
+          String mapName = tokens[1];
+          String hostChar = tokens[2];
+          currentSetupWindow.receiveHostData(mapName, hostChar);
+        }
+      });
+    });
 
-     // 2. Observer de Estado de Juego
-     gameEngine.setOnStateChangeListener(newState -> {
-         if (newState instanceof SetupState) {
-             Platform.runLater(() -> {
-                 // Guardamos la referencia en nuestra variable global
-                 currentSetupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
-                 primaryStage.setScene(currentSetupWindow.createScene());
-             });
-         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
-             Platform.runLater(() -> {
-                 GameWindow gameWindow = new GameWindow(gameEngine);
-                 primaryStage.setScene(gameWindow.createScene());
-                 primaryStage.centerOnScreen();
-             });
-         }
-     });
+    gameEngine.setOnStateChangeListener(newState -> {
+      if (newState instanceof SetupState) {
+                // APAGAMOS EL LATIDO DEL HOST
+                if (lobbyWindow != null) lobbyWindow.stopLobby(); 
+                handshakeComplete = true; 
 
-    // 3. Modificamos ligeramente la creación del Lobby para interceptar los datos
-    // de conexión
-    LobbyWindow lobby = new LobbyWindow(udpManager, gameEngine);
-    // Le pasamos un callback para atrapar la IP/Puerto cuando el usuario da click
-    // en Conectar    
-        lobby.setOnConnectAction((ip, port, rolSeleccionado) -> {
-            this.lastTargetIp = ip;
-            this.lastTargetPort = port;
-            this.isHost = rolSeleccionado; // Ahora el rol lo define el ComboBox, no el clic
+                Platform.runLater(() -> {
+                    currentSetupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
+                    primaryStage.setScene(currentSetupWindow.createScene());
+                });
+      } else if (newState instanceof com.slingshot.core.states.PlayingState) {
+        Platform.runLater(() -> {
+          GameWindow gameWindow = new GameWindow(gameEngine);
+          primaryStage.setScene(gameWindow.createScene());
+          primaryStage.centerOnScreen();
         });
+      }
+    });
 
-        lobby.display(primaryStage);
+    LobbyWindow lobby = new LobbyWindow(udpManager, gameEngine);
+
+    lobbyWindow.setOnConnectAction((ip, port, rolSeleccionado) -> {
+      this.lastTargetIp = ip;
+      this.lastTargetPort = port;
+      this.isHost = rolSeleccionado;
+    });
+
+    lobby.display(primaryStage);
   }
 
   @Override
   public void stop() {
-    if (udpManager != null)
+    if (udpManager != null) {
       udpManager.close();
+    }
     System.exit(0);
   }
 
