@@ -12,10 +12,13 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
 
+
+
 public class AppFX extends Application {
 
   private UDPManager udpManager;
   private GameEngine gameEngine;
+  private SetupWindow currentSetupWindow;
 
   // Variables temporales para saber a dónde disparar el siguiente paquete
   private String lastTargetIp = "127.0.0.1";
@@ -32,35 +35,41 @@ public class AppFX extends Application {
       udpManager.send(message, lastTargetIp, lastTargetPort);
     });
 
-    // 1. Observer de Red
-    udpManager.addObserver(message -> {
-      Platform.runLater(() -> {
-        NetworkProtocol.processMessage(message, gameEngine);
+   // 1. Observer de Red
+     udpManager.addObserver(message -> {
+         Platform.runLater(() -> {
+             NetworkProtocol.processMessage(message, gameEngine);
 
-        // Si recibimos un Handshake y no habíamos enviado nada, asumimos el rol de
-        // Cliente
-        if (message.equals("HANDSHAKE_OK") && !isHost) {
-          System.out.println("[AppFX] -> Asumiendo rol de CLIENTE.");
-        }
-      });
-    });
+             if (message.equals("HANDSHAKE_OK") && !isHost) {
+                  System.out.println("[AppFX] -> Asumiendo rol de CLIENTE.");
+             }
 
-    // 2. Observer de Estado de Juego (MAGIA UI)
-    gameEngine.setOnStateChangeListener(newState -> {
-      if (newState instanceof SetupState) {
-        Platform.runLater(() -> {
-          SetupWindow setupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
-          primaryStage.setScene(setupWindow.createScene());
-        });
-      } else if (newState instanceof com.slingshot.core.states.PlayingState) {
-        // NUEVO: Transición al lienzo del juego
-        Platform.runLater(() -> {
-          GameWindow gameWindow = new GameWindow(gameEngine);
-          primaryStage.setScene(gameWindow.createScene());
-          primaryStage.centerOnScreen();
-        });
-      }
-    });
+             // NUEVO: Interceptar el paquete del Host para actualizar la GUI del Cliente
+             if (message.startsWith("SETUP_PC1") && !isHost && currentSetupWindow != null) {
+                 String[] tokens = message.split(";");
+                 String mapName = tokens[1];
+                 String hostChar = tokens[2];
+                 currentSetupWindow.receiveHostData(mapName, hostChar);
+             }
+         });
+     });
+
+     // 2. Observer de Estado de Juego
+     gameEngine.setOnStateChangeListener(newState -> {
+         if (newState instanceof SetupState) {
+             Platform.runLater(() -> {
+                 // Guardamos la referencia en nuestra variable global
+                 currentSetupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
+                 primaryStage.setScene(currentSetupWindow.createScene());
+             });
+         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
+             Platform.runLater(() -> {
+                 GameWindow gameWindow = new GameWindow(gameEngine);
+                 primaryStage.setScene(gameWindow.createScene());
+                 primaryStage.centerOnScreen();
+             });
+         }
+     });
 
     // 3. Modificamos ligeramente la creación del Lobby para interceptar los datos
     // de conexión

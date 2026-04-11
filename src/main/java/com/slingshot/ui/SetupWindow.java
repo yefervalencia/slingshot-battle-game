@@ -9,91 +9,101 @@ import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 
 public class SetupWindow {
-    private UDPManager udpManager;
-    private String targetIp;
-    private int targetPort;
-    private boolean isHost;
+  private UDPManager udpManager;
+  private String targetIp;
+  private int targetPort;
+  private boolean isHost;
 
-    public SetupWindow(UDPManager udpManager, String targetIp, int targetPort, boolean isHost) {
-        this.udpManager = udpManager;
-        this.targetIp = targetIp;
-        this.targetPort = targetPort;
-        this.isHost = isHost;
+  // Variables de interfaz accesibles
+  private ComboBox<String> cbCharacter;
+  private ComboBox<String> cbMap;
+  private Button btnAction;
+
+  public SetupWindow(UDPManager udpManager, String targetIp, int targetPort, boolean isHost) {
+    this.udpManager = udpManager;
+    this.targetIp = targetIp;
+    this.targetPort = targetPort;
+    this.isHost = isHost;
+  }
+
+  public Scene createScene() {
+    VBox layout = new VBox(15);
+    layout.setPadding(new Insets(40));
+    layout.setAlignment(Pos.CENTER);
+    layout.setStyle("-fx-background-color: #2c3e50;");
+
+    Label lblTitle = new Label(isHost ? "SALA DE PREPARACIÓN (HOST)" : "SALA DE PREPARACIÓN (CLIENTE)");
+    lblTitle.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: white;");
+
+    TextField txtName = new TextField(isHost ? "Jugador_Host" : "Jugador_Cliente");
+    txtName.setMaxWidth(200);
+
+    cbCharacter = new ComboBox<>();
+    // Por ahora usamos Strings. Más adelante lo conectaremos a tus entidades reales
+    cbCharacter.getItems().addAll("Sniper", "Artillery", "Tank");
+    cbCharacter.setValue("Sniper");
+    cbCharacter.setMaxWidth(200);
+
+    cbMap = new ComboBox<>();
+    cbMap.getItems().addAll("Desert_Map", "Forest_Map");
+    cbMap.setValue("Desert_Map");
+    cbMap.setMaxWidth(200);
+
+    btnAction = new Button(isHost ? "ENVIAR CONFIGURACIÓN" : "ESTOY LISTO");
+    btnAction.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
+
+    if (isHost) {
+      layout.getChildren().addAll(
+          lblTitle, new Label("Tu Nombre:"), txtName, new Label("Tu Personaje:"), cbCharacter,
+          new Label("Mapa de Batalla:"), cbMap, new Label(""), btnAction);
+
+      btnAction.setOnAction(e -> {
+        String msg = NetworkProtocol.formatSetupPC1(cbMap.getValue(), cbCharacter.getValue(), txtName.getText());
+        udpManager.send(msg, targetIp, targetPort);
+        btnAction.setDisable(true);
+        btnAction.setText("ESPERANDO AL CLIENTE...");
+        cbCharacter.setDisable(true);
+        cbMap.setDisable(true);
+      });
+    } else {
+      // ESTADO INICIAL DEL CLIENTE: TOTALMENTE BLOQUEADO
+      cbMap.setDisable(true);
+      cbCharacter.setDisable(true);
+      btnAction.setDisable(true);
+      btnAction.setText("ESPERANDO QUE EL HOST ELIJA...");
+
+      layout.getChildren().addAll(
+          lblTitle, new Label("Tu Nombre:"), txtName, new Label("Tu Personaje:"), cbCharacter,
+          new Label("Mapa (Elegido por Host):"), cbMap, new Label(""), btnAction);
+
+      btnAction.setOnAction(e -> {
+        udpManager.send("READY_PC2;" + cbCharacter.getValue() + ";" + txtName.getText(), targetIp, targetPort);
+        btnAction.setDisable(true);
+        btnAction.setText("ESPERANDO INICIO...");
+        cbCharacter.setDisable(true);
+      });
     }
 
-    public Scene createScene() {
-        VBox layout = new VBox(15);
-        layout.setPadding(new Insets(40));
-        layout.setAlignment(Pos.CENTER);
-        layout.setStyle("-fx-background-color: #2c3e50;"); // Fondo oscuro elegante
+    layout.getChildren().forEach(node -> {
+      if (node instanceof Label && node != lblTitle) {
+        ((Label) node).setStyle("-fx-text-fill: #bdc3c7;");
+      }
+    });
 
-        Label lblTitle = new Label(isHost ? "SALA DE PREPARACIÓN (HOST)" : "SALA DE PREPARACIÓN (CLIENTE)");
-        lblTitle.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: white;");
+    return new Scene(layout, 800, 600);
+  }
 
-        // --- CAMPOS DE FORMULARIO ---
-        TextField txtName = new TextField(isHost ? "Jugador_Host" : "Jugador_Cliente");
-        txtName.setMaxWidth(200);
+  // --- EL MÉTODO MÁGICO PARA ACTUALIZAR AL CLIENTE ---
+  public void receiveHostData(String mapName, String hostCharacter) {
+    if (!isHost) {
+      cbMap.setValue(mapName); // Mostramos el mapa que eligió el Host
 
-        ComboBox<String> cbCharacter = new ComboBox<>();
-        cbCharacter.getItems().addAll("Sniper", "Artillery", "Tank");
-        cbCharacter.setValue("Sniper");
-        cbCharacter.setMaxWidth(200);
+      cbCharacter.getItems().remove(hostCharacter); // BLOQUEAMOS EL PERSONAJE DEL HOST
+      cbCharacter.getSelectionModel().selectFirst(); // Seleccionamos el siguiente disponible
+      cbCharacter.setDisable(false); // Desbloqueamos para que el Cliente elija
 
-        ComboBox<String> cbMap = new ComboBox<>();
-        cbMap.getItems().addAll("Desert_Map", "Forest_Map");
-        cbMap.setValue("Desert_Map");
-        cbMap.setMaxWidth(200);
-
-        Button btnAction = new Button(isHost ? "ENVIAR CONFIGURACIÓN" : "ESTOY LISTO");
-        btnAction.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
-
-        // --- LÓGICA DE ROLES ASIMÉTRICOS ---
-        if (isHost) {
-            // El Host puede elegir el mapa
-            layout.getChildren().addAll(
-                lblTitle,
-                new Label("Tu Nombre:"), txtName,
-                new Label("Tu Personaje:"), cbCharacter,
-                new Label("Mapa de Batalla:"), cbMap,
-                new Label(""), btnAction
-            );
-
-            btnAction.setOnAction(e -> {
-                String msg = NetworkProtocol.formatSetupPC1(cbMap.getValue(), cbCharacter.getValue(), txtName.getText());
-                udpManager.send(msg, targetIp, targetPort);
-                btnAction.setDisable(true);
-                btnAction.setText("ESPERANDO AL CLIENTE...");
-            });
-
-        } else {
-            // El Cliente NO puede elegir mapa (por ahora lo deshabilitamos visualmente)
-            cbMap.setDisable(true);
-            cbMap.setPromptText("Esperando mapa del Host...");
-            
-            layout.getChildren().addAll(
-                lblTitle,
-                new Label("Tu Nombre:"), txtName,
-                new Label("Tu Personaje:"), cbCharacter,
-                new Label("Mapa (Elegido por Host):"), cbMap,
-                new Label(""), btnAction
-            );
-
-            // TODO: Más adelante activaremos este botón solo cuando llegue el SETUP_PC1 del Host
-            btnAction.setOnAction(e -> {
-                // Enviamos nuestro READY_PC2 (Token inventado por ti en el Documento Maestro)
-                udpManager.send("READY_PC2;" + cbCharacter.getValue() + ";" + txtName.getText(), targetIp, targetPort);
-                btnAction.setDisable(true);
-                btnAction.setText("ESPERANDO INICIO...");
-            });
-        }
-
-        // Estilizar los Labels genéricos
-        layout.getChildren().forEach(node -> {
-            if (node instanceof Label && node != lblTitle) {
-                ((Label) node).setStyle("-fx-text-fill: #bdc3c7;");
-            }
-        });
-
-        return new Scene(layout, 1280, 720);
+      btnAction.setDisable(false); // Desbloqueamos el botón
+      btnAction.setText("ESTOY LISTO");
     }
+  }
 }
