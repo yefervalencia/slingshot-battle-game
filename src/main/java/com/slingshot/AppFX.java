@@ -42,7 +42,7 @@ public class AppFX extends Application {
             udpManager.send("HANDSHAKE_OK", lastTargetIp, lastTargetPort);
             handshakeComplete = true;
           }
-          
+
           NetworkProtocol.processMessage(message, gameEngine);
 
           if (message.startsWith("SETUP_PC1") && !isHost && currentSetupWindow != null) {
@@ -66,7 +66,7 @@ public class AppFX extends Application {
           });
         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
           Platform.runLater(() -> {
-            GameWindow gameWindow = new GameWindow(gameEngine);
+            GameWindow gameWindow = new GameWindow(gameEngine, isHost);
             primaryStage.setScene(gameWindow.createScene());
             primaryStage.centerOnScreen();
           });
