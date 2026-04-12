@@ -1,143 +1,73 @@
 package com.slingshot.entities;
 
-import java.awt.Graphics;
-import java.awt.Color;
+import com.slingshot.core.InputManager;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.image.Image;
+import javafx.scene.paint.Color;
 
-public class Player extends GameObject {
+public class Player {
+    private double x, y;
+    private final double SIZE = 60.0;
+    private final double SPEED = 5.0;
+    private Image skin;
+    private double angle = 0; // Ángulo hacia donde mira
 
-  // Enums definidos según tu diagrama
-  public enum Status {
-    IDLE, MOVING, AIMING, LOCKED
-  }
+    // Stats
+    private int lives = 3;
+    private int ammo = 20;
 
-  public enum Side {
-    LEFT, RIGHT
-  }
+    public Player(double startX, double startY, Image skin) {
+        this.x = startX;
+        this.y = startY;
+        this.skin = skin;
+    }
 
-  private String username;
-  private int health, score, ammo;
-  private int characterId;
-  private Status status;
-  private Side side;
+    public void update(InputManager input, double minX, double maxX, double maxY) {
+        // Movimiento
+        if (input.isKeyPressed("W")) y -= SPEED;
+        if (input.isKeyPressed("S")) y += SPEED;
+        if (input.isKeyPressed("A")) x -= SPEED;
+        if (input.isKeyPressed("D")) x += SPEED;
 
-  private Projectile currentProjectile;
+        // Colisiones con el mapa
+        if (y < 0) y = 0;
+        if (y > maxY - SIZE) y = maxY - SIZE;
+        if (x < minX) x = minX;
+        if (x > maxX - SIZE) x = maxX - SIZE;
 
-  private float minX, maxX, minY, maxY;
+        // Calcular ángulo hacia el mouse (Trigonometría Básica)
+        double centerX = x + SIZE / 2;
+        double centerY = y + SIZE / 2;
+        double dx = input.getMouseX() - centerX;
+        double dy = input.getMouseY() - centerY;
+        this.angle = Math.toDegrees(Math.atan2(dy, dx));
+    }
 
-  public Player(String id, String username, float x, float y, Side side) {
-    super(id, x, y, 50, 50); // Tamaño base del jugador
-    this.username = username;
-    this.health = 100;
-    this.score = 0;
-    this.ammo = 10;
-    this.status = Status.IDLE;
-    this.side = side;
-  }
+    public void render(GraphicsContext gc) {
+        double centerX = x + SIZE / 2;
+        double centerY = y + SIZE / 2;
 
-  @Override
-  public void update() {
-    // Actualizar la hitbox si el jugador se mueve
-    updateHitbox();
-  }
+        gc.save(); // Guardamos el estado del lienzo
+        
+        // Movemos el eje de rotación al centro del jugador
+        gc.translate(centerX, centerY);
+        gc.rotate(angle); // Rotamos el lienzo
 
-  @Override
-  public void draw(Graphics g) {
-    // Dibujo temporal para pruebas
-    g.setColor(side == Side.LEFT ? Color.BLUE : Color.RED);
-    g.fillRect((int) x, (int) y, width, height);
-    g.setColor(Color.WHITE);
-    g.drawString(username, (int) x, (int) y - 25);
-    g.drawString("HP:" + health + " SC:" + score + " AM:" + ammo,
-        (int) x - 10, (int) y - 10);
-  }
+        // Dibujamos al jugador (compensando la traslación previa)
+        if (skin != null) {
+            gc.drawImage(skin, -SIZE / 2, -SIZE / 2, SIZE, SIZE);
+        } else {
+            gc.setFill(Color.BLUE);
+            gc.fillRect(-SIZE / 2, -SIZE / 2, SIZE, SIZE);
+        }
 
-  // Métodos definidos en tu diagrama
-  public void move(int dx, int dy) {
-    if (status != Status.MOVING)
-      return;
+        gc.restore(); // Restauramos el lienzo para que el resto del mapa no gire
+    }
 
-    float newX = this.x + dx;
-    float newY = this.y + dy;
-
-    // Restricción de zona (se configura desde GameEngine según Side)
-    if (newX >= minX && newX + width <= maxX)
-      this.x = newX;
-    if (newY >= minY && newY + height <= maxY)
-      this.y = newY;
-  }
-
-  public void takeDamage(int amount) {
-    this.health = Math.max(0, this.health - amount);
-    if (this.health == 0)
-      this.active = false;
-  }
-
-  @Override
-  public void heal(int amount) {
-    this.health = Math.min(100, this.health + amount);
-  }
-
-  public boolean consumeAmmo() {
-    if (this.ammo <= 0)
-      return false;
-    this.ammo--;
-    return true;
-  }
-
-  public void setMovementBounds(float minX, float maxX, float minY, float maxY) {
-    this.minX = minX;
-    this.maxX = maxX;
-    this.minY = minY;
-    this.maxY = maxY;
-  }
-
-  public void refillAmmoIfEmpty() {
-    if (this.ammo <= 0)
-      this.ammo = 1;
-  }
-
-  // Getters y Setters
-  public String getUsername() {
-    return username;
-  }
-
-  public int getHealth() {
-    return health;
-  }
-
-  public int getScore() {
-    return score;
-  }
-
-  public int getAmmo() {
-    return ammo;
-  }
-
-  public Status getStatus() {
-    return status;
-  }
-
-  public Side getSide() {
-    return side;
-  }
-
-  public Projectile getCurrentProjectile() {
-    return currentProjectile;
-  }
-
-  public void setStatus(Status status) {
-    this.status = status;
-  }
-
-  public void setScore(int score) {
-    this.score = score;
-  }
-
-  public void setAmmo(int ammo) {
-    this.ammo = ammo;
-  }
-
-  public void setCurrentProjectile(Projectile p) {
-    this.currentProjectile = p;
-  }
+    public double getCenterX() { return x + SIZE / 2; }
+    public double getCenterY() { return y + SIZE / 2; }
+    public double getAngle() { return angle; }
+    public int getLives() { return lives; }
+    public int getAmmo() { return ammo; }
+    public void reduceAmmo() { this.ammo--; }
 }
