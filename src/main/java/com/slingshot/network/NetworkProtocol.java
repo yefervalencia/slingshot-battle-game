@@ -17,6 +17,11 @@ public class NetworkProtocol {
         return "TURN_END" + SEPARATOR + nextPlayer;
     }
 
+    public static String formatProjectile(String type, double y, double angle, double power) {
+        // Formato: BULLET;tipo;y_entrada;angulo;potencia
+        return String.format("BULLET;%s;%.2f;%.2f;%.2f", type, y, angle, power);
+    }
+
     public static void processMessage(String rawMessage, GameEngine engine) {
         if (rawMessage == null || rawMessage.trim().isEmpty()) {
             return;
@@ -27,8 +32,9 @@ public class NetworkProtocol {
         String command = tokens[0];
 
         try {
-            // 2. MAGIA DE SOLID: El protocolo ya NO hace un switch. 
-            // Solo le avisa al motor que llegó algo, y el Motor (a través de su Estado) decide qué hacer.
+            // 2. MAGIA DE SOLID: El protocolo ya NO hace un switch.
+            // Solo le avisa al motor que llegó algo, y el Motor (a través de su Estado)
+            // decide qué hacer.
             engine.processNetworkMessage(command, tokens);
 
         } catch (Exception e) {

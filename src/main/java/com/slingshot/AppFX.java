@@ -22,6 +22,9 @@ public class AppFX extends Application {
   private GameEngine gameEngine;
   private SetupWindow currentSetupWindow;
   private LobbyWindow lobbyWindow;
+  
+  // ¡CORRECCIÓN 1! Declaramos gameWindow a nivel global para que la red la pueda ver
+  private GameWindow gameWindow; 
 
   private String lastTargetIp = "127.0.0.1";
   private int lastTargetPort = 5001;
@@ -30,7 +33,7 @@ public class AppFX extends Application {
 
   @Override
   public void start(Stage primaryStage) {
-    try { // <- BLOQUE DE PROTECCIÓN ACTIVO
+    try { 
       udpManager = new UDPManager();
       gameEngine = new GameEngine();
 
@@ -55,6 +58,19 @@ public class AppFX extends Application {
             String hostChar = tokens[2];
             currentSetupWindow.receiveHostData(mapName, hostChar);
           }
+
+          // RECIBIR BALAS DEL RIVAL
+          if (message.startsWith("BULLET")) {
+            String[] tokens = message.split(";");
+            String type = tokens[1];
+            double entryY = Double.parseDouble(tokens[2]);
+            double angle = Double.parseDouble(tokens[3]);
+            double power = Double.parseDouble(tokens[4]);
+
+            if (gameWindow != null) {
+              gameWindow.spawnRemoteProjectile(type, entryY, angle, power);
+            }
+          }
         });
       });
 
@@ -77,7 +93,15 @@ public class AppFX extends Application {
           });
         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
           Platform.runLater(() -> {
-            GameWindow gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
+            
+            // ¡CORRECCIÓN 2! Usamos la variable global y le añadimos el Listener de salida de balas
+            gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
+            
+            gameWindow.setOnProjectileExitListener((type, y, angle, power) -> {
+                String msg = NetworkProtocol.formatProjectile(type, y, angle, power);
+                udpManager.send(msg, lastTargetIp, lastTargetPort);
+            });
+
             primaryStage.setScene(gameWindow.createScene());
             primaryStage.centerOnScreen();
           });
@@ -94,7 +118,6 @@ public class AppFX extends Application {
       lobbyWindow.display(primaryStage);
 
     } catch (Exception e) {
-      // SI FALLA, AHORA SÍ NOS DIRÁ EL POR QUÉ
       System.err.println("=== ERROR GRAVE AL INICIAR LA INTERFAZ ===");
       e.printStackTrace();
     }

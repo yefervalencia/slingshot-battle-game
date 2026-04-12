@@ -18,6 +18,16 @@ import java.util.List;
 
 public class GameWindow {
 
+  public interface OnProjectileExitListener {
+    void onExit(String type, double y, double angle, double power);
+  }
+
+  private OnProjectileExitListener exitListener;
+
+  public void setOnProjectileExitListener(OnProjectileExitListener listener) {
+    this.exitListener = listener;
+  }
+
   // --- NUEVAS VARIABLES DE DISPARO ---
   private boolean isCharging = false;
   private double chargePower = 5.0; // Potencia base
@@ -123,10 +133,34 @@ public class GameWindow {
     while (it.hasNext()) {
       Projectile p = it.next();
       p.update();
-      if (!p.isAlive()) {
-        it.remove(); // Borramos la bala si sale de la pantalla
+
+      // LÓGICA DE RELEVO (Handover)
+      boolean exited = false;
+      if (isHost && p.getX() > WIDTH)
+        exited = true;
+      if (!isHost && p.getX() < 0)
+        exited = true;
+
+      if (exited) {
+        if (exitListener != null) {
+          // Enviamos la posición Y actual, el ángulo y la potencia original
+          exitListener.onExit(p.getType(), p.getY(), p.getAngle(), p.getPower());
+        }
+        it.remove();
+      } else if (!p.isAlive()) {
+        it.remove(); // Borrar si chocó contra algo (techo/piso)
       }
     }
+  }
+
+  public void spawnRemoteProjectile(String type, double y, double angle, double power) {
+    // Si soy Host, la bala entra por la derecha (X=1280).
+    // Si soy Cliente, entra por la izquierda (X=0).
+    double startX = isHost ? WIDTH : 0;
+
+    // Creamos la bala con los datos recibidos
+    Projectile p = new Projectile(startX, y, angle, type, power, isHost);
+    activeProjectiles.add(p);
   }
 
   private void shoot() {
