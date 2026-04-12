@@ -14,6 +14,10 @@ import javafx.stage.Stage;
 
 public class AppFX extends Application {
 
+  // Variables para guardar la identidad visual
+  private String matchMapId = "desert";
+  private String myCharacterId = "sniper";
+
   private UDPManager udpManager;
   private GameEngine gameEngine;
   private SetupWindow currentSetupWindow;
@@ -62,11 +66,18 @@ public class AppFX extends Application {
 
           Platform.runLater(() -> {
             currentSetupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
+
+            // Atrapamos los datos elegidos
+            currentSetupWindow.setOnSetupCompleteListener((mapId, charId) -> {
+              this.matchMapId = mapId;
+              this.myCharacterId = charId;
+            });
+
             primaryStage.setScene(currentSetupWindow.createScene());
           });
         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
           Platform.runLater(() -> {
-            GameWindow gameWindow = new GameWindow(gameEngine, isHost);
+            GameWindow gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
             primaryStage.setScene(gameWindow.createScene());
             primaryStage.centerOnScreen();
           });
