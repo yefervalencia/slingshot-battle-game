@@ -17,6 +17,12 @@ import java.util.Iterator;
 import java.util.List;
 
 public class GameWindow {
+
+  // --- NUEVAS VARIABLES DE DISPARO ---
+  private boolean isCharging = false;
+  private double chargePower = 5.0; // Potencia base
+  private final double MAX_POWER = 28.0; // Límite de potencia de artillería
+
   private GameEngine engine;
   private boolean isHost;
   private String mapId, charId;
@@ -95,13 +101,21 @@ public class GameWindow {
 
     localPlayer.update(inputManager, minX, maxX, HEIGHT);
 
-    // 3. Disparar (Click izquierdo)
-    if (inputManager.isMousePressed() && canShoot && localPlayer.getAmmo() > 0) {
+    // 3. Sistema de Disparo (Click sostenido y soltar)
+    if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
+      isCharging = true;
+      // Solo la artillería carga potencia. El francotirador dispara con potencia
+      // fija.
+      if (currentWeapon.equals("artillery")) {
+        chargePower += 0.4; // Velocidad de carga (puedes ajustarla)
+        if (chargePower > MAX_POWER)
+          chargePower = MAX_POWER; // Tope máximo
+      }
+    } else if (isCharging) {
+      // El jugador SOLTÓ el click izquierdo. ¡Fuego!
       shoot();
-      canShoot = false; // Bloquea hasta soltar el click
-    }
-    if (!inputManager.isMousePressed()) {
-      canShoot = true; // Permite disparar de nuevo
+      isCharging = false;
+      chargePower = 5.0; // Reseteamos la potencia para el siguiente tiro
     }
 
     // 4. Actualizar Balas
@@ -118,7 +132,7 @@ public class GameWindow {
   private void shoot() {
     localPlayer.reduceAmmo();
     Projectile p = new Projectile(localPlayer.getCenterX(), localPlayer.getCenterY(), localPlayer.getAngle(),
-        currentWeapon);
+        currentWeapon, chargePower, isHost);
     activeProjectiles.add(p);
 
     // TODO: Fase 3 -> Enviar paquete UDP al oponente: "SHOOT;x;y;angulo;tipo"
@@ -155,5 +169,23 @@ public class GameWindow {
     gc.fillText("Vidas: " + localPlayer.getLives(), 20, 30);
     gc.fillText("Munición: " + localPlayer.getAmmo(), 20, 50);
     gc.fillText("Arma (Z/X): " + currentWeapon.toUpperCase(), 20, 70);
+
+    // 4. Dibujar Línea de Apuntado (Láser)
+    gc.setStroke(Color.rgb(255, 0, 0, 0.4));
+    gc.setLineWidth(2);
+    gc.strokeLine(localPlayer.getCenterX(), localPlayer.getCenterY(), inputManager.getMouseX(),
+        inputManager.getMouseY());
+
+    // 5. Dibujar Barra de Carga de Artillería sobre el jugador
+    if (isCharging && currentWeapon.equals("artillery")) {
+      double barWidth = 50;
+      double chargePercent = chargePower / MAX_POWER;
+
+      gc.setFill(Color.rgb(0, 0, 0, 0.5)); // Fondo barra
+      gc.fillRect(localPlayer.getCenterX() - barWidth / 2, localPlayer.getCenterY() - 45, barWidth, 6);
+
+      gc.setFill(Color.rgb(231, 76, 60)); // Relleno barra roja
+      gc.fillRect(localPlayer.getCenterX() - barWidth / 2, localPlayer.getCenterY() - 45, barWidth * chargePercent, 6);
+    }
   }
 }

@@ -6,38 +6,87 @@ import javafx.scene.paint.Color;
 public class Projectile {
     private double x, y;
     private double velX, velY;
-    private String type; // "sniper" o "artillery"
+    private String type;
     private boolean isAlive = true;
+    private boolean isHost;
 
-    // Constantes físicas
-    private final double SPEED = 15.0;
+    // Físicas
+    private final double GRAVITY = 0.4;
+    private final double WIDTH = 1280;
+    private final double HEIGHT = 720;
+    private final double RADIUS;
 
-    public Projectile(double startX, double startY, double angleDeg, String type) {
+    // Recibe la potencia (power) y el rol (isHost)
+    public Projectile(double startX, double startY, double angleDeg, String type, double power, boolean isHost) {
         this.x = startX;
         this.y = startY;
         this.type = type;
+        this.isHost = isHost;
 
-        // Convertimos el ángulo a radianes para calcular la velocidad en X e Y
         double rad = Math.toRadians(angleDeg);
-        this.velX = Math.cos(rad) * SPEED;
-        this.velY = Math.sin(rad) * SPEED;
+        
+        if (type.equals("sniper")) {
+            // El francotirador siempre dispara a velocidad máxima (ignora la carga)
+            double speed = 25.0; 
+            this.velX = Math.cos(rad) * speed;
+            this.velY = Math.sin(rad) * speed;
+            this.RADIUS = 4;
+        } else {
+            // La artillería usa la potencia que cargó el jugador con el click
+            this.velX = Math.cos(rad) * power;
+            this.velY = Math.sin(rad) * power;
+            this.RADIUS = 8;
+        }
     }
 
     public void update() {
+        if (!isAlive) return;
+
+        // Si es artillería, la gravedad tira de la bala hacia abajo (Y aumenta)
+        if (type.equals("artillery")) {
+            velY += GRAVITY; 
+        }
+
         x += velX;
         y += velY;
 
-        // Si la bala sale de la pantalla de 1280x720, la marcamos para borrarla
-        if (x < 0 || x > 1280 || y < 0 || y > 720) {
-            isAlive = false;
+        // --- SISTEMA DE COLISIONES Y REBOTES ---
+        if (type.equals("sniper")) {
+            // 1. Rebote en Techo (Y=0) y Piso (Y=720)
+            if (y - RADIUS <= 0) { y = RADIUS; velY = -velY; }
+            if (y + RADIUS >= HEIGHT) { y = HEIGHT - RADIUS; velY = -velY; }
+
+            // 2. Rebote en la espalda y cruce de red
+            if (isHost) {
+                if (x - RADIUS <= 0) { x = RADIUS; velX = -velX; } // Rebota en la pared izquierda
+                if (x > WIDTH) isAlive = false; // Cruza la línea derecha (Se va por red)
+            } else {
+                if (x + RADIUS >= WIDTH) { x = WIDTH - RADIUS; velX = -velX; } // Rebota en la pared derecha
+                if (x < 0) isAlive = false; // Cruza la línea izquierda (Se va por red)
+            }
+        } else if (type.equals("artillery")) {
+            // La artillería explota si toca piso o techo
+            if (y + RADIUS >= HEIGHT || y - RADIUS <= 0) isAlive = false;
+            
+            if (isHost) {
+                if (x - RADIUS <= 0) isAlive = false; // Explota en pared izquierda
+                if (x > WIDTH) isAlive = false; // Se va por la red
+            } else {
+                if (x + RADIUS >= WIDTH) isAlive = false; // Explota en pared derecha
+                if (x < 0) isAlive = false; // Se va por la red
+            }
         }
     }
 
     public void render(GraphicsContext gc) {
-        gc.setFill(type.equals("sniper") ? Color.CYAN : Color.ORANGE);
-        // Dibujamos un círculo para la bala (las de artillería son más grandes)
-        double size = type.equals("sniper") ? 6 : 12;
-        gc.fillOval(x - size/2, y - size/2, size, size);
+        if (type.equals("sniper")) {
+            gc.setFill(Color.CYAN);
+            // Efecto visual de bala alargada para el francotirador
+            gc.fillOval(x - RADIUS, y - RADIUS, RADIUS * 2, RADIUS * 2); 
+        } else {
+            gc.setFill(Color.ORANGE);
+            gc.fillOval(x - RADIUS, y - RADIUS, RADIUS * 2, RADIUS * 2);
+        }
     }
 
     public boolean isAlive() { return isAlive; }
