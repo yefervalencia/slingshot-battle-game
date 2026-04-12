@@ -1,5 +1,7 @@
 package com.slingshot.network;
 
+import java.util.Locale;
+
 import com.slingshot.core.GameEngine;
 
 public class NetworkProtocol {
@@ -18,8 +20,8 @@ public class NetworkProtocol {
     }
 
     public static String formatProjectile(String type, double y, double angle, double power) {
-        // Formato: BULLET;tipo;y_entrada;angulo;potencia
-        return String.format("BULLET;%s;%.2f;%.2f;%.2f", type, y, angle, power);
+        // Usamos Locale.US para forzar el punto decimal en lugar de la coma
+        return String.format(Locale.US, "BULLET;%s;%.2f;%.2f;%.2f", type, y, angle, power);
     }
 
     public static void processMessage(String rawMessage, GameEngine engine) {

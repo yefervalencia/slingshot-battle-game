@@ -63,9 +63,9 @@ public class AppFX extends Application {
           if (message.startsWith("BULLET")) {
             String[] tokens = message.split(";");
             String type = tokens[1];
-            double entryY = Double.parseDouble(tokens[2]);
-            double angle = Double.parseDouble(tokens[3]);
-            double power = Double.parseDouble(tokens[4]);
+            double entryY = Double.parseDouble(tokens[2].replace(',', '.'));
+            double angle = Double.parseDouble(tokens[3].replace(',', '.'));
+            double power = Double.parseDouble(tokens[4].replace(',', '.'));
 
             if (gameWindow != null) {
               gameWindow.spawnRemoteProjectile(type, entryY, angle, power);
