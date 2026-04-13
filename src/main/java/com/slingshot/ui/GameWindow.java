@@ -11,6 +11,8 @@ import com.slingshot.entities.HealthCrate;
 import com.slingshot.entities.IndestructibleCrate;
 import com.slingshot.entities.Player;
 import com.slingshot.entities.Projectile;
+import com.slingshot.network.NetworkProtocol;
+
 import javafx.animation.AnimationTimer;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
@@ -24,6 +26,9 @@ import java.util.Iterator;
 import java.util.List;
 
 public class GameWindow {
+
+  private double oppX = 0, oppY = 0; // Posición cruda del rival
+  private long lastPosSend = 0; // Control de frecuencia de envío
 
   private boolean isGameOver = false;
   private String finalStatus = ""; // "GANASTE" o "PERDISTE"
@@ -178,7 +183,7 @@ public class GameWindow {
 
         if (inValidZone) {
           activeBarriers.add(new com.slingshot.entities.Barrier(mx - 22, my - 22));
-          currentWeapon = "sniper";
+          // currentWeapon = "sniper";
         }
       }
     }
@@ -283,6 +288,17 @@ public class GameWindow {
     if (localPlayer.getLives() <= 0) {
       finalizarPartida();
     }
+
+    // 6. Enviar posición al rival (aprox 20 veces por segundo para fluidez)
+    if (System.currentTimeMillis() - lastPosSend > 50) {
+      engine.sendNetworkMessage(NetworkProtocol.formatPosition(localPlayer.getCenterX(), localPlayer.getCenterY()));
+      lastPosSend = System.currentTimeMillis();
+    }
+  }
+
+  public void updateOpponentPos(double x, double y) {
+    this.oppX = x;
+    this.oppY = y;
   }
 
   public void spawnRemoteProjectile(String type, double y, double angle, double power) {
@@ -403,6 +419,32 @@ public class GameWindow {
       gc.fillText("Tu puntaje: " + localPlayer.getScore(), WIDTH / 2 - 120, HEIGHT / 2 + 60);
       gc.fillText("Puntaje rival: " + (opponentScore == -1 ? "..." : opponentScore), WIDTH / 2 - 120, HEIGHT / 2 + 100);
     }
+
+    // --- RADAR DEL OPONENTE ---
+    double radarX = isHost ? WIDTH - 40 : 10; // Lado contrario al jugador
+
+    // A) INDICADOR LUMINOSO EN Y
+    gc.setFill(Color.rgb(255, 0, 0, 0.3)); // Fondo del riel
+    gc.fillRect(radarX + 10, 0, 10, HEIGHT);
+
+    gc.setFill(Color.LIME); // El "LED" indicador
+    gc.setEffect(new javafx.scene.effect.Bloom()); // Efecto de brillo si lo tienes disponible
+    gc.fillOval(radarX + 5, oppY - 10, 20, 20);
+    gc.setEffect(null);
+
+    // B) INDICADOR NUMÉRICO EN X (1 al 30)
+    // Calculamos qué tan profundo está el rival en su zona de 384px (30% de 1280)
+    double areaMovimiento = WIDTH * 0.30;
+    // Si es host, el rival está a la derecha (x de 896 a 1280).
+    // Si es cliente, el rival está a la izquierda (x de 0 a 384).
+    double xRelativa = isHost ? (WIDTH - oppX) : oppX;
+    int xSegmento = (int) ((xRelativa / areaMovimiento) * 29) + 1;
+    // Limitamos por seguridad
+    xSegmento = Math.max(1, Math.min(30, xSegmento));
+
+    gc.setFill(Color.WHITE);
+    gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 24));
+    gc.fillText("DIST: " + xSegmento, radarX - 20, oppY - 20);
   }
 
   private void generateCrates() {

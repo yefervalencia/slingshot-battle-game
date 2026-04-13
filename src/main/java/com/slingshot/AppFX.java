@@ -96,6 +96,18 @@ public class AppFX extends Application {
               }
             });
           }
+          // RECIBIR POSICIÓN DEL RIVAL
+          if (message.startsWith("POS")) {
+            String[] tokens = message.split(";");
+            double ox = Double.parseDouble(tokens[1].replace(',', '.'));
+            double oy = Double.parseDouble(tokens[2].replace(',', '.'));
+
+            Platform.runLater(() -> {
+              if (gameWindow != null) {
+                gameWindow.updateOpponentPos(ox, oy);
+              }
+            });
+          }
         });
       });
 

@@ -24,6 +24,11 @@ public class NetworkProtocol {
         return String.format(Locale.US, "BULLET;%s;%.2f;%.2f;%.2f", type, y, angle, power);
     }
 
+    public static String formatPosition(double x, double y) {
+        // Usamos Locale.US para evitar problemas de comas/puntos
+        return String.format(java.util.Locale.US, "POS;%.2f;%.2f", x, y);
+    }
+
     public static void processMessage(String rawMessage, GameEngine engine) {
         if (rawMessage == null || rawMessage.trim().isEmpty()) {
             return;
