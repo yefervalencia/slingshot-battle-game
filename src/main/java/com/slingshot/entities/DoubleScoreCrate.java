@@ -14,8 +14,10 @@ public class DoubleScoreCrate extends Crate {
 
     @Override
     public boolean onHitByBullet(Player player, Projectile bullet) {
-        player.activateDoubleScore(8); // Activa por 8 segundos
-        player.addScore(10);
+        if (player != null) {
+            player.activateDoubleScore(8); // Activa por 8 segundos
+            player.addScore(10);
+        }
         this.destroy();
         return true; // La bala se destruye
     }

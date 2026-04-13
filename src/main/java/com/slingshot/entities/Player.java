@@ -57,13 +57,16 @@ public class Player {
         double centerX = x + SIZE / 2;
         double centerY = y + SIZE / 2;
 
-        gc.save(); // Guardamos el estado del lienzo
-
-        // Movemos el eje de rotación al centro del jugador
+        gc.save();
         gc.translate(centerX, centerY);
-        gc.rotate(angle); // Rotamos el lienzo
+        gc.rotate(angle); // 1. Rotamos hacia el mouse
 
-        // Dibujamos al jugador (compensando la traslación previa)
+        // 2. MAGIA 2D: Si apuntamos a la izquierda, invertimos el eje Y para que no
+        // quede de cabeza
+        if (Math.abs(angle) > 90) {
+            gc.scale(1, -1);
+        }
+
         if (skin != null) {
             gc.drawImage(skin, -SIZE / 2, -SIZE / 2, SIZE, SIZE);
         } else {
@@ -71,7 +74,7 @@ public class Player {
             gc.fillRect(-SIZE / 2, -SIZE / 2, SIZE, SIZE);
         }
 
-        gc.restore(); // Restauramos el lienzo para que el resto del mapa no gire
+        gc.restore();
     }
 
     // --- MÉTODOS DE DAÑO Y PUNTUACIÓN ---

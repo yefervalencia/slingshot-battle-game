@@ -159,7 +159,7 @@ public class GameWindow {
               p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
 
             // La caja decide si destruye la bala (polimorfismo)
-            boolean destruyeBala = c.onHitByBullet(localPlayer, p);
+            boolean destruyeBala = c.onHitByBullet(null, p);
             if (destruyeBala)
               projectileDestroyed = true;
 
