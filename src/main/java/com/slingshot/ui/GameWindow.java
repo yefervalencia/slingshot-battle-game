@@ -342,12 +342,13 @@ public class GameWindow {
     // Mostramos el estado actual de selección
     String modoActivo = isBuildingMode ? "CONSTRUCCIÓN (C)" : "ARMA: " + currentWeapon.toUpperCase();
     gc.fillText(modoActivo, hudX, 120);
+    gc.fillText("Barreras: " + (MAX_BARRIERS-activeBarriers.size()), hudX, 140);
 
     // HUD de Doble Puntuación (Más grande y llamativo)
     if (localPlayer.isDoubleScoreActive()) {
       gc.setFill(Color.PURPLE);
       gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 22)); // Un poco más grande
-      gc.fillText("¡DOBLE PUNTUACIÓN! (" + localPlayer.getDoubleScoreTimeLeft() + "s)", hudX, 155);
+      gc.fillText("¡DOBLE PUNTUACIÓN! (" + localPlayer.getDoubleScoreTimeLeft() + "s)", hudX, 165);
     }
 
     // Resetear la fuente para otros elementos (como el láser o texto de depuración)
@@ -425,7 +426,7 @@ public class GameWindow {
 
     gc.setFill(Color.WHITE);
     gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 24));
-    gc.fillText("DIST: " + xSegmento, radarX - 20, oppY - 20);
+    gc.fillText("D:" + xSegmento, radarX - 20, oppY - 20);
   }
 
   private void generateCrates() {
