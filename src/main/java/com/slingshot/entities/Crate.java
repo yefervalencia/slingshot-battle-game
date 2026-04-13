@@ -1,6 +1,7 @@
 package com.slingshot.entities;
 
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 
 public abstract class Crate {
@@ -16,14 +17,24 @@ public abstract class Crate {
   public void render(GraphicsContext gc) {
     if (!isAlive)
       return;
-    gc.setFill(getColor());
-    gc.fillRect(x, y, size, size);
-    gc.setStroke(Color.BLACK);
-    gc.strokeRect(x, y, size, size);
+
+    Image crateImage = getImage(); // Obtenemos la imagen de la clase hija
+
+    if (crateImage != null) {
+      gc.drawImage(crateImage, x, y, size, size);
+    } else {
+      // Fallback por si la imagen no carga
+      gc.setFill(getColor());
+      gc.fillRect(x, y, size, size);
+      gc.setStroke(Color.BLACK);
+      gc.strokeRect(x, y, size, size);
+    }
   }
 
-  // MÉTODOS QUE CADA HIJA DEBE DEFINIR
+  // MÉTODOS ABSTRACTOS PARA LAS HIJAS
   protected abstract Color getColor();
+
+  protected abstract Image getImage(); // ¡NUEVO!
 
   // El método polimórfico: Cada caja decide qué hacer cuando le disparan
   public abstract boolean onHitByBullet(Player player, Projectile bullet);

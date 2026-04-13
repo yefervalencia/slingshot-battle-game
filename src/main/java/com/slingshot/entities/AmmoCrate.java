@@ -1,11 +1,26 @@
 package com.slingshot.entities;
 
+import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 
 public class AmmoCrate extends Crate {
     public AmmoCrate(double x, double y) {
         super(x, y);
     }
+
+    private static Image img;
+    static {
+        try {
+            img = new Image(EmptyCrate.class.getResourceAsStream("/assets/crate_ammo.png"));
+        } catch (Exception e) {
+            System.err.println("No se encontro crate_ammo.png");
+        }
+    }
+
+    @Override
+    protected Image getImage() {
+        return img;
+    } // ¡Retornamos la imagen!
 
     @Override
     protected Color getColor() {
