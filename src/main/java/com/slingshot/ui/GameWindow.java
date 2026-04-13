@@ -143,47 +143,30 @@ public class GameWindow {
       Projectile p = it.next();
       p.update();
 
+      // Dentro del bucle de proyectiles...
       boolean projectileDestroyed = false;
 
-      // A) Verificar choque contra el Jugador Local
+      // 1. Colisión con Jugador (Solo balas enemigas)
       if (p.isEnemy() && localPlayer.checkHit(p.getX(), p.getY())) {
-        System.out.println("¡TE DIERON!");
         localPlayer.takeDamage();
         projectileDestroyed = true;
       }
 
-      // B) Verificar choque contra Cajas
-      for (Crate c : crates) {
-        if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
-            p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
+      // 2. Colisión con Cajas (SOLO SI ES ENEMIGA Y NO ES ARTILLERÍA)
+      if (p.isEnemy() && !p.getType().equals("artillery")) {
+        for (Crate c : crates) {
+          if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
+              p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
 
-          // Ejecutamos la lógica de la caja y recibimos si la bala muere
-          boolean shouldDestroy = c.onHitByBullet(localPlayer, p);
+            // La caja decide si destruye la bala (polimorfismo)
+            boolean destruyeBala = c.onHitByBullet(localPlayer, p);
+            if (destruyeBala)
+              projectileDestroyed = true;
 
-          if (shouldDestroy) {
-            projectileDestroyed = true;
+            // Enviar recompensa al oponente que nos disparó
+            enviarRecompensaRed(c);
+            break;
           }
-
-          // --- LÓGICA DE RED PARA RECOMPENSAS ---
-          // Si una bala ENEMIGA golpea MI caja, yo le aviso al enemigo sus premios
-          if (p.isEnemy()) {
-            String rewardMsg = "";
-            if (c instanceof AmmoCrate)
-              rewardMsg = "REWARD;AMMO;5";
-            else if (c instanceof HealthCrate)
-              rewardMsg = "REWARD;LIFE;1";
-            else if (c instanceof DoubleScoreCrate)
-              rewardMsg = "REWARD;DOUBLE;8";
-            else if (c instanceof EmptyCrate)
-              rewardMsg = "REWARD;SCORE;10";
-
-            if (!rewardMsg.isEmpty()) {
-              // Enviamos el paquete de recompensa al oponente
-              engine.sendNetworkMessage(rewardMsg);
-            }
-          }
-
-          break;
         }
       }
 
@@ -227,6 +210,7 @@ public class GameWindow {
   }
 
   private void render() {
+    double hudX = isHost ? 20 : (WIDTH * 0.70) + 20;
     GraphicsContext gc = canvas.getGraphicsContext2D();
 
     // 1. Fondo y Zonas
@@ -253,10 +237,15 @@ public class GameWindow {
 
     // 3. HUD (Interfaz de usuario rápida)
     gc.setFill(Color.WHITE);
-    gc.fillText("Vidas: " + localPlayer.getLives(), 20, 30);
-    gc.fillText("Munición: " + localPlayer.getAmmo(), 20, 50);
-    gc.fillText("Arma (Z/X): " + currentWeapon.toUpperCase(), 20, 70);
-    gc.fillText("PUNTOS: " + localPlayer.getScore(), 20, 90); // ¡NUEVO!
+    gc.fillText("Vidas: " + localPlayer.getLives(), hudX, 30);
+    gc.fillText("Munición: " + localPlayer.getAmmo(), hudX, 50);
+    gc.fillText("Puntos: " + localPlayer.getScore(), hudX, 70);
+    gc.fillText("Arma (Z/X): " + currentWeapon.toUpperCase(), hudX, 90);
+
+    if (localPlayer.isDoubleScoreActive()) {
+      gc.setFill(Color.PURPLE);
+      gc.fillText("¡DOBLE PUNTUACIÓN! (" + localPlayer.getDoubleScoreTimeLeft() + "s)", hudX, 95);
+    }
 
     // 4. Dibujar Línea de Apuntado (Láser)
     gc.setStroke(Color.rgb(255, 0, 0, 0.4));
@@ -288,22 +277,38 @@ public class GameWindow {
     double minX = isHost ? WIDTH * 0.30 : 0;
     double maxX = isHost ? WIDTH : WIDTH * 0.70;
 
-    for (int i = 0; i < 15; i++) {
-      double cx = minX + rand.nextDouble() * (maxX - minX - 40);
-      double cy = rand.nextDouble() * (HEIGHT - 40);
+    int creadas = 0;
+    int intentos = 0;
+    // Intentamos crear 15 cajas, pero con un límite de intentos para evitar bucles
+    // infinitos
+    while (creadas < 15 && intentos < 300) {
+      intentos++;
+      double cx = minX + rand.nextDouble() * (maxX - minX - 45);
+      double cy = rand.nextDouble() * (HEIGHT - 45);
 
-      // RNG (Random Number Generator) para decidir qué caja crear
-      double prob = rand.nextDouble();
-      if (prob < 0.20) {
-        crates.add(new IndestructibleCrate(cx, cy)); // 20%
-      } else if (prob < 0.30) {
-        crates.add(new HealthCrate(cx, cy)); // 10%
-      } else if (prob < 0.40) {
-        crates.add(new AmmoCrate(cx, cy)); // 10%
-      } else if (prob < 0.50) {
-        crates.add(new DoubleScoreCrate(cx, cy)); // 10%
-      } else {
-        crates.add(new EmptyCrate(cx, cy)); // 50% (La normal)
+      // --- EVITAR SUPERPOSICIÓN ---
+      boolean superpuesta = false;
+      for (Crate existente : crates) {
+        // Verificamos si la distancia es menor al tamaño de la caja (con margen)
+        if (Math.abs(existente.getX() - cx) < 45 && Math.abs(existente.getY() - cy) < 45) {
+          superpuesta = true;
+          break;
+        }
+      }
+
+      if (!superpuesta) {
+        double prob = rand.nextDouble();
+        if (prob < 0.20)
+          crates.add(new IndestructibleCrate(cx, cy));
+        else if (prob < 0.30)
+          crates.add(new HealthCrate(cx, cy));
+        else if (prob < 0.40)
+          crates.add(new AmmoCrate(cx, cy));
+        else if (prob < 0.50)
+          crates.add(new DoubleScoreCrate(cx, cy));
+        else
+          crates.add(new EmptyCrate(cx, cy));
+        creadas++;
       }
     }
   }
@@ -325,6 +330,22 @@ public class GameWindow {
     } else if (type.equals("SCORE")) {
       localPlayer.addScore(amount);
       System.out.println("[RECOMPENSA] +10 Puntos");
+    }
+  }
+
+  private void enviarRecompensaRed(Crate c) {
+    String msg = "";
+    if (c instanceof AmmoCrate)
+      msg = "REWARD;AMMO;5";
+    else if (c instanceof HealthCrate)
+      msg = "REWARD;LIFE;1";
+    else if (c instanceof DoubleScoreCrate)
+      msg = "REWARD;DOUBLE;8";
+    else if (c instanceof EmptyCrate)
+      msg = "REWARD;SCORE;10";
+
+    if (!msg.isEmpty()) {
+      engine.sendNetworkMessage(msg);
     }
   }
 }

@@ -116,6 +116,7 @@ public class Projectile {
 
     public void bounceHorizontal() {
         this.velX = -this.velX;
+        this.x += this.velX; // Empuje para que no se quede pegada
     }
 
     // --- LOS MÉTODOS GET (INDISPENSABLES PARA LA RED) ---
