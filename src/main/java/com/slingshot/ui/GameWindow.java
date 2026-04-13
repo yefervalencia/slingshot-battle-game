@@ -40,6 +40,7 @@ public class GameWindow {
   private List<Barrier> activeBarriers = new ArrayList<>();
   private boolean isBuildingMode = false;
   private final int MAX_BARRIERS = 4; // Límite de construcción
+  private boolean canPlaceBarrier = true;
 
   public interface OnProjectileExitListener {
     void onExit(String type, double y, double angle, double power);
@@ -138,7 +139,8 @@ public class GameWindow {
       localPlayer.addAmmo(1);
       lastAmmoRegen = System.currentTimeMillis();
     }
-    // 1. Selector de Armas
+
+    // 1. Selector de Armas (ÚNICO Y EXCLUYENTE)
     if (inputManager.isKeyPressed("Z")) {
       currentWeapon = "sniper";
       isBuildingMode = false;
@@ -148,18 +150,17 @@ public class GameWindow {
       isBuildingMode = false;
     }
     if (inputManager.isKeyPressed("C")) {
-      // Al entrar en construcción, se desactiva el disparo visualmente
-      isBuildingMode = true;
+      isBuildingMode = true; // Activa el modo construcción de forma segura
     }
 
     // 2. Límites de movilidad
     double minX = isHost ? 0 : WIDTH * 0.70;
     double maxX = isHost ? WIDTH * 0.30 : WIDTH;
-
     localPlayer.update(inputManager, minX, maxX, HEIGHT);
 
-    // 3. Sistema de Disparo (Click sostenido y soltar)
-    if (!isBuildingMode) { // <--- CLAVE: Solo dispara si NO está construyendo
+    // 3. Sistema de Acción (Disparo vs Construcción)
+    if (!isBuildingMode) {
+      // MODO DISPARO
       if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
         isCharging = true;
         if (currentWeapon.equals("artillery")) {
@@ -173,18 +174,23 @@ public class GameWindow {
         chargePower = 5.0;
       }
     } else {
-      if (inputManager.isMousePressed() && activeBarriers.size() < MAX_BARRIERS) {
-        double mx = inputManager.getMouseX();
-        double my = inputManager.getMouseY();
+      // MODO CONSTRUCCIÓN (Con seguro anti-metralleta de 60FPS)
+      if (inputManager.isMousePressed()) {
+        if (canPlaceBarrier && activeBarriers.size() < MAX_BARRIERS) {
+          double mx = inputManager.getMouseX();
+          double my = inputManager.getMouseY();
 
-        double limit30 = WIDTH * 0.30;
-        double limit70 = WIDTH * 0.70;
-        boolean inValidZone = isHost ? (mx > limit30) : (mx < limit70);
+          double limit30 = WIDTH * 0.30;
+          double limit70 = WIDTH * 0.70;
+          boolean inValidZone = isHost ? (mx > limit30) : (mx < limit70);
 
-        if (inValidZone) {
-          activeBarriers.add(new com.slingshot.entities.Barrier(mx - 22, my - 22));
-          // currentWeapon = "sniper";
+          if (inValidZone) {
+            activeBarriers.add(new com.slingshot.entities.Barrier(mx - 22, my - 22));
+            canPlaceBarrier = false; // Pone el seguro al hacer click
+          }
         }
+      } else {
+        canPlaceBarrier = true; // Quita el seguro al soltar el click
       }
     }
 
@@ -194,10 +200,9 @@ public class GameWindow {
       Projectile p = it.next();
       p.update();
 
-      // Dentro del bucle de proyectiles...
       boolean projectileDestroyed = false;
 
-      // COLISIÓN CON BARRERAS (Solo balas enemigas, no ignoradas por artillería)
+      // COLISIÓN CON BARRERAS
       if (p.isEnemy()) {
         Iterator<Barrier> bIt = activeBarriers.iterator();
         while (bIt.hasNext()) {
@@ -214,25 +219,23 @@ public class GameWindow {
         }
       }
 
-      // 1. Colisión con Jugador (Solo balas enemigas)
+      // 1. Colisión con Jugador
       if (p.isEnemy() && localPlayer.checkHit(p.getX(), p.getY())) {
         localPlayer.takeDamage();
         projectileDestroyed = true;
         engine.sendNetworkMessage("REWARD;SCORE;50");
       }
 
-      // 2. Colisión con Cajas (SOLO SI ES ENEMIGA Y NO ES ARTILLERÍA)
+      // 2. Colisión con Cajas
       if (p.isEnemy() && !p.getType().equals("artillery")) {
         for (Crate c : crates) {
           if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
               p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
 
-            // La caja decide si destruye la bala (polimorfismo)
             boolean destruyeBala = c.onHitByBullet(null, p);
             if (destruyeBala)
               projectileDestroyed = true;
 
-            // Enviar recompensa al oponente que nos disparó
             enviarRecompensaRed(c);
             break;
           }
@@ -252,9 +255,8 @@ public class GameWindow {
         }
         it.remove();
       } else if (!p.isAlive() || projectileDestroyed) {
-        it.remove(); // Borrar si la bala "murió" o chocó contra algo
+        it.remove();
       }
-
     }
 
     // 5. Lógica de Regeneración Dinámica
@@ -263,33 +265,12 @@ public class GameWindow {
       regenerarMapa();
     }
 
-    // 1. Selector de modo construcción
-    if (inputManager.isKeyPressed("C")) {
-      isBuildingMode = !isBuildingMode;
-    }
-
-    // 2. Lógica de posicionamiento (dentro de update)
-    if (isBuildingMode && inputManager.isMousePressed() && activeBarriers.size() < MAX_BARRIERS) {
-      double mx = inputManager.getMouseX();
-      double my = inputManager.getMouseY();
-
-      // Verificamos si está en su 70% (el área de batalla/roja)
-      double limit30 = WIDTH * 0.30;
-      double limit70 = WIDTH * 0.70;
-      boolean inValidZone = isHost ? (mx > limit30) : (mx < limit70);
-
-      if (inValidZone) {
-        activeBarriers.add(new Barrier(mx - 22, my - 22));
-        isBuildingMode = false; // Salimos del modo tras ponerla
-        // canShoot = false; // Opcional: evitar disparo accidental
-      }
-    }
     // --- DETECTAR SI ME QUEDÉ SIN VIDAS ---
     if (localPlayer.getLives() <= 0) {
       finalizarPartida();
     }
 
-    // 6. Enviar posición al rival (aprox 20 veces por segundo para fluidez)
+    // 6. Enviar posición al rival
     if (System.currentTimeMillis() - lastPosSend > 50) {
       engine.sendNetworkMessage(NetworkProtocol.formatPosition(localPlayer.getCenterX(), localPlayer.getCenterY()));
       lastPosSend = System.currentTimeMillis();
