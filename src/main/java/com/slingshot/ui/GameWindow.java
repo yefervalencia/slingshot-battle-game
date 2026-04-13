@@ -119,10 +119,18 @@ public class GameWindow {
 
   private void update() {
     // 1. Selector de Armas
-    if (inputManager.isKeyPressed("Z"))
+    if (inputManager.isKeyPressed("Z")) {
       currentWeapon = "sniper";
-    if (inputManager.isKeyPressed("X"))
+      isBuildingMode = false;
+    }
+    if (inputManager.isKeyPressed("X")) {
       currentWeapon = "artillery";
+      isBuildingMode = false;
+    }
+    if (inputManager.isKeyPressed("C")) {
+      // Al entrar en construcción, se desactiva el disparo visualmente
+      isBuildingMode = true;
+    }
 
     // 2. Límites de movilidad
     double minX = isHost ? 0 : WIDTH * 0.70;
@@ -131,20 +139,33 @@ public class GameWindow {
     localPlayer.update(inputManager, minX, maxX, HEIGHT);
 
     // 3. Sistema de Disparo (Click sostenido y soltar)
-    if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
-      isCharging = true;
-      // Solo la artillería carga potencia. El francotirador dispara con potencia
-      // fija.
-      if (currentWeapon.equals("artillery")) {
-        chargePower += 0.4; // Velocidad de carga (puedes ajustarla)
-        if (chargePower > MAX_POWER)
-          chargePower = MAX_POWER; // Tope máximo
+    if (!isBuildingMode) { // <--- CLAVE: Solo dispara si NO está construyendo
+      if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
+        isCharging = true;
+        if (currentWeapon.equals("artillery")) {
+          chargePower += 0.4;
+          if (chargePower > MAX_POWER)
+            chargePower = MAX_POWER;
+        }
+      } else if (isCharging) {
+        shoot();
+        isCharging = false;
+        chargePower = 5.0;
       }
-    } else if (isCharging) {
-      // El jugador SOLTÓ el click izquierdo. ¡Fuego!
-      shoot();
-      isCharging = false;
-      chargePower = 5.0; // Reseteamos la potencia para el siguiente tiro
+    } else {
+      if (inputManager.isMousePressed() && activeBarriers.size() < MAX_BARRIERS) {
+        double mx = inputManager.getMouseX();
+        double my = inputManager.getMouseY();
+
+        double limit30 = WIDTH * 0.30;
+        double limit70 = WIDTH * 0.70;
+        boolean inValidZone = isHost ? (mx > limit30) : (mx < limit70);
+
+        if (inValidZone) {
+          activeBarriers.add(new com.slingshot.entities.Barrier(mx - 22, my - 22));
+          currentWeapon = "sniper";
+        }
+      }
     }
 
     // 4. Actualizar Balas y Colisiones
@@ -293,15 +314,28 @@ public class GameWindow {
 
     // 3. HUD (Interfaz de usuario rápida)
     gc.setFill(Color.WHITE);
-    gc.fillText("Vidas: " + localPlayer.getLives(), hudX, 30);
-    gc.fillText("Munición: " + localPlayer.getAmmo(), hudX, 50);
-    gc.fillText("Puntos: " + localPlayer.getScore(), hudX, 70);
-    gc.fillText("Arma (Z/X): " + currentWeapon.toUpperCase(), hudX, 90);
 
+    // Configuramos una fuente más grande (20px) y gruesa (BOLD)
+    gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 20));
+
+    gc.fillText("Vidas: " + localPlayer.getLives(), hudX, 30);
+    gc.fillText("Munición: " + localPlayer.getAmmo(), hudX, 60); // Aumenté el espaciado Y
+    gc.fillText("Puntos: " + localPlayer.getScore(), hudX, 90);
+
+    // Mostramos el estado actual de selección
+    String modoActivo = isBuildingMode ? "CONSTRUCCIÓN (C)" : "ARMA: " + currentWeapon.toUpperCase();
+    gc.fillText(modoActivo, hudX, 120);
+
+    // HUD de Doble Puntuación (Más grande y llamativo)
     if (localPlayer.isDoubleScoreActive()) {
       gc.setFill(Color.PURPLE);
-      gc.fillText("¡DOBLE PUNTUACIÓN! (" + localPlayer.getDoubleScoreTimeLeft() + "s)", hudX, 95);
+      gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 22)); // Un poco más grande
+      gc.fillText("¡DOBLE PUNTUACIÓN! (" + localPlayer.getDoubleScoreTimeLeft() + "s)", hudX, 155);
     }
+
+    // Resetear la fuente para otros elementos (como el láser o texto de depuración)
+    // si es necesario
+    gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.NORMAL, 12));
 
     // 4. Dibujar Línea de Apuntado (Láser)
     gc.setStroke(Color.rgb(255, 0, 0, 0.4));
