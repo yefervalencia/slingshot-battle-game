@@ -88,6 +88,14 @@ public class Player {
         return score;
     }
 
+    public void addLife() {
+        this.lives++;
+    }
+
+    public void addAmmo(int amount) {
+        this.ammo += amount;
+    }
+
     // --- SISTEMA DE COLISIÓN (Hitbox) ---
     // Verifica si la coordenada de la bala (px, py) está dentro del cuadrado del
     // jugador

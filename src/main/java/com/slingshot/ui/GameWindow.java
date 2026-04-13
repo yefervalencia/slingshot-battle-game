@@ -2,7 +2,12 @@ package com.slingshot.ui;
 
 import com.slingshot.core.GameEngine;
 import com.slingshot.core.InputManager;
+import com.slingshot.entities.AmmoCrate;
 import com.slingshot.entities.Crate;
+import com.slingshot.entities.DoubleScoreCrate;
+import com.slingshot.entities.EmptyCrate;
+import com.slingshot.entities.HealthCrate;
+import com.slingshot.entities.IndestructibleCrate;
 import com.slingshot.entities.Player;
 import com.slingshot.entities.Projectile;
 import javafx.animation.AnimationTimer;
@@ -132,7 +137,6 @@ public class GameWindow {
       chargePower = 5.0; // Reseteamos la potencia para el siguiente tiro
     }
 
-    // 4. Actualizar Balas
     // 4. Actualizar Balas y Colisiones
     Iterator<Projectile> it = activeProjectiles.iterator();
     while (it.hasNext()) {
@@ -142,7 +146,7 @@ public class GameWindow {
       boolean projectileDestroyed = false;
 
       // A) Verificar choque contra el Jugador Local
-      if (localPlayer.checkHit(p.getX(), p.getY())) {
+      if (p.isEnemy() && localPlayer.checkHit(p.getX(), p.getY())) {
         System.out.println("¡TE DIERON!");
         localPlayer.takeDamage();
         projectileDestroyed = true;
@@ -153,16 +157,11 @@ public class GameWindow {
         if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
             p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
 
-          if (c.getType().equals("indestructible")) {
-            // Las balas de artillería explotan. Las de francotirador podrían rebotar (por
-            // ahora las destruimos por simplicidad)
-            projectileDestroyed = true;
-          } else {
-            c.destroy();
-            localPlayer.addScore(10); // Te sumas puntos por romperla
-            projectileDestroyed = true;
-          }
-          break; // Salimos del for de cajas porque la bala ya chocó
+          // Delega la acción a la caja específica (Polimorfismo)
+          c.onHitByBullet(localPlayer, p);
+
+          projectileDestroyed = true;
+          break;
         }
       }
 
@@ -190,14 +189,15 @@ public class GameWindow {
     double startX = isHost ? WIDTH : 0;
 
     // Creamos la bala con los datos recibidos
-    Projectile p = new Projectile(startX, y, angle, type, power, isHost);
+    Projectile p = new Projectile(startX, y, angle, type, power, isHost, true);
     activeProjectiles.add(p);
   }
 
   private void shoot() {
     localPlayer.reduceAmmo();
+    // Cuando TÚ disparas, isEnemy es FALSE
     Projectile p = new Projectile(localPlayer.getCenterX(), localPlayer.getCenterY(), localPlayer.getAngle(),
-        currentWeapon, chargePower, isHost);
+        currentWeapon, chargePower, isHost, false);
     activeProjectiles.add(p);
 
     // TODO: Fase 3 -> Enviar paquete UDP al oponente: "SHOOT;x;y;angulo;tipo"
@@ -263,16 +263,26 @@ public class GameWindow {
 
   private void generateCrates() {
     java.util.Random rand = new java.util.Random();
-
-    // Las cajas solo aparecen en el 70% enemigo
     double minX = isHost ? WIDTH * 0.30 : 0;
     double maxX = isHost ? WIDTH : WIDTH * 0.70;
 
-    // Generamos 15 cajas aleatorias
     for (int i = 0; i < 15; i++) {
       double cx = minX + rand.nextDouble() * (maxX - minX - 40);
       double cy = rand.nextDouble() * (HEIGHT - 40);
-      crates.add(new Crate(cx, cy));
+
+      // RNG (Random Number Generator) para decidir qué caja crear
+      double prob = rand.nextDouble();
+      if (prob < 0.20) {
+        crates.add(new IndestructibleCrate(cx, cy)); // 20%
+      } else if (prob < 0.30) {
+        crates.add(new HealthCrate(cx, cy)); // 10%
+      } else if (prob < 0.40) {
+        crates.add(new AmmoCrate(cx, cy)); // 10%
+      } else if (prob < 0.50) {
+        crates.add(new DoubleScoreCrate(cx, cy)); // 10%
+      } else {
+        crates.add(new EmptyCrate(cx, cy)); // 50% (La normal)
+      }
     }
   }
 }

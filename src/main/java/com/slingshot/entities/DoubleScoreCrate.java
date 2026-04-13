@@ -1,9 +1,15 @@
 package com.slingshot.entities;
+import javafx.scene.paint.Color;
 
-class DoubleScoreCrate extends CrateType {
-    public DoubleScoreCrate() { super("DOUBLE_SCORE", 1); }
+public class DoubleScoreCrate extends Crate {
+    public DoubleScoreCrate(double x, double y) { super(x, y); }
+
     @Override
-    public void applyEffect(Player player) {
-        // player.setScore(player.getScore() + 100);
+    protected Color getColor() { return Color.PURPLE; } // Color morado/épico
+
+    @Override
+    public void onHitByBullet(Player player, Projectile bullet) {
+        player.addScore(20); // Otorga el doble de puntos de una vez
+        this.destroy();
     }
 }

@@ -9,6 +9,7 @@ public class Projectile {
     private String type;
     private boolean isAlive = true;
     private boolean isHost;
+    private boolean isEnemy;
     private double angle; // Guardamos el ángulo original para el relevo de red
     private double power;
 
@@ -19,13 +20,15 @@ public class Projectile {
     private final double RADIUS;
 
     // Recibe la potencia (power) y el rol (isHost)
-    public Projectile(double startX, double startY, double angleDeg, String type, double power, boolean isHost) {
+    public Projectile(double startX, double startY, double angleDeg, String type, double power, boolean isHost,
+            boolean isEnemy) {
         this.x = startX;
         this.y = startY;
         this.type = type;
         this.angle = angleDeg;
         this.power = power;
         this.isHost = isHost;
+        this.isEnemy = isEnemy;
 
         double rad = Math.toRadians(angleDeg);
 
@@ -111,6 +114,10 @@ public class Projectile {
         }
     }
 
+    public void bounceHorizontal() {
+        this.velX = -this.velX;
+    }
+
     // --- LOS MÉTODOS GET (INDISPENSABLES PARA LA RED) ---
     public double getX() {
         return x;
@@ -134,5 +141,9 @@ public class Projectile {
 
     public boolean isAlive() {
         return isAlive;
+    }
+
+    public boolean isEnemy() {
+        return isEnemy;
     }
 }

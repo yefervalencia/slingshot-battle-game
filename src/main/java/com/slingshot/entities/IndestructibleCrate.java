@@ -1,14 +1,21 @@
 package com.slingshot.entities;
+import javafx.scene.paint.Color;
 
-public class IndestructibleCrate extends CrateType {
-    public IndestructibleCrate() { 
-        // 999 de vida o simplemente ignoramos el daño en el método
-        super("INDESTRUCTIBLE", 999); 
-    }
+public class IndestructibleCrate extends Crate {
+    public IndestructibleCrate(double x, double y) { super(x, y); }
 
     @Override
-    public void applyEffect(Player player) {
-        // No hace nada al jugador, su función es física
-        System.out.println("¡Impacto en muro indestructible! La bala debería rebotar.");
+    protected Color getColor() { return Color.DARKGRAY; } // Metal
+
+    @Override
+    public void onHitByBullet(Player player, Projectile bullet) {
+        // NO llamamos a this.destroy(). Por ende, sobrevive.
+        // NO suma puntos.
+        
+        // Regla: La bala de francotirador rebota (invertimos su vector X). 
+        // La artillería simplemente choca y explota en GameWindow.
+        if (bullet.getType().equals("sniper")) {
+            bullet.bounceHorizontal(); 
+        }
     }
 }

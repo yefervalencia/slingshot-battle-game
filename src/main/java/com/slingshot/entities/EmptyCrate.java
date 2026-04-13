@@ -1,14 +1,15 @@
 package com.slingshot.entities;
+import javafx.scene.paint.Color;
 
-public class EmptyCrate extends CrateType {
-    public EmptyCrate() { 
-        super("EMPTY", 1); // 1 de vida, se destruye fácil
-    }
+public class EmptyCrate extends Crate {
+    public EmptyCrate(double x, double y) { super(x, y); }
 
     @Override
-    public void applyEffect(Player player) {
-        // // Según tu regla: Da 10 puntos de puntaje
-        // player.setScore(player.getScore() + 10);
-        // System.out.println("Caja vacía: +10 puntos para " + player.getUsername());
+    protected Color getColor() { return Color.SADDLEBROWN; } // Color madera
+
+    @Override
+    public void onHitByBullet(Player player, Projectile bullet) {
+        player.addScore(10); // Otorga los 10 puntos base
+        this.destroy();      // Se destruye
     }
 }
