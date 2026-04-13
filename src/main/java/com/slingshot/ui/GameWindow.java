@@ -3,6 +3,7 @@ package com.slingshot.ui;
 import com.slingshot.core.GameEngine;
 import com.slingshot.core.InputManager;
 import com.slingshot.entities.AmmoCrate;
+import com.slingshot.entities.Barrier;
 import com.slingshot.entities.Crate;
 import com.slingshot.entities.DoubleScoreCrate;
 import com.slingshot.entities.EmptyCrate;
@@ -23,6 +24,10 @@ import java.util.Iterator;
 import java.util.List;
 
 public class GameWindow {
+
+  private List<Barrier> activeBarriers = new ArrayList<>();
+  private boolean isBuildingMode = false;
+  private final int MAX_BARRIERS = 4; // Límite de construcción
 
   public interface OnProjectileExitListener {
     void onExit(String type, double y, double angle, double power);
@@ -151,6 +156,23 @@ public class GameWindow {
       // Dentro del bucle de proyectiles...
       boolean projectileDestroyed = false;
 
+      // COLISIÓN CON BARRERAS (Solo balas enemigas, no ignoradas por artillería)
+      if (p.isEnemy()) {
+        Iterator<Barrier> bIt = activeBarriers.iterator();
+        while (bIt.hasNext()) {
+          Barrier b = bIt.next();
+          if (p.getX() > b.getX() && p.getX() < b.getX() + b.getSize() &&
+              p.getY() > b.getY() && p.getY() < b.getY() + b.getSize()) {
+
+            b.takeDamage(p.getType());
+            projectileDestroyed = true;
+            if (!b.isAlive())
+              bIt.remove();
+            break;
+          }
+        }
+      }
+
       // 1. Colisión con Jugador (Solo balas enemigas)
       if (p.isEnemy() && localPlayer.checkHit(p.getX(), p.getY())) {
         localPlayer.takeDamage();
@@ -190,12 +212,35 @@ public class GameWindow {
       } else if (!p.isAlive() || projectileDestroyed) {
         it.remove(); // Borrar si la bala "murió" o chocó contra algo
       }
+
     }
 
     // 5. Lógica de Regeneración Dinámica
     if (System.currentTimeMillis() - lastRegenTime > REGEN_COOLDOWN) {
       lastRegenTime = System.currentTimeMillis();
       regenerarMapa();
+    }
+
+    // 1. Selector de modo construcción
+    if (inputManager.isKeyPressed("C")) {
+      isBuildingMode = !isBuildingMode;
+    }
+
+    // 2. Lógica de posicionamiento (dentro de update)
+    if (isBuildingMode && inputManager.isMousePressed() && activeBarriers.size() < MAX_BARRIERS) {
+      double mx = inputManager.getMouseX();
+      double my = inputManager.getMouseY();
+
+      // Verificamos si está en su 70% (el área de batalla/roja)
+      double limit30 = WIDTH * 0.30;
+      double limit70 = WIDTH * 0.70;
+      boolean inValidZone = isHost ? (mx > limit30) : (mx < limit70);
+
+      if (inValidZone) {
+        activeBarriers.add(new Barrier(mx - 22, my - 22));
+        isBuildingMode = false; // Salimos del modo tras ponerla
+        // canShoot = false; // Opcional: evitar disparo accidental
+      }
     }
   }
 
@@ -281,6 +326,17 @@ public class GameWindow {
       c.render(gc);
     }
 
+    for (Barrier b : activeBarriers) {
+      b.render(gc);
+    }
+
+    // Dibujar preview si estamos en modo construcción
+    if (isBuildingMode) {
+      gc.setGlobalAlpha(0.3);
+      gc.setFill(Color.LIGHTBLUE);
+      gc.fillRect(inputManager.getMouseX() - 22, inputManager.getMouseY() - 22, 45, 45);
+      gc.setGlobalAlpha(1.0);
+    }
   }
 
   private void generateCrates() {
