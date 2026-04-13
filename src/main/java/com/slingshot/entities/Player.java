@@ -24,16 +24,24 @@ public class Player {
 
     public void update(InputManager input, double minX, double maxX, double maxY) {
         // Movimiento
-        if (input.isKeyPressed("W")) y -= SPEED;
-        if (input.isKeyPressed("S")) y += SPEED;
-        if (input.isKeyPressed("A")) x -= SPEED;
-        if (input.isKeyPressed("D")) x += SPEED;
+        if (input.isKeyPressed("W"))
+            y -= SPEED;
+        if (input.isKeyPressed("S"))
+            y += SPEED;
+        if (input.isKeyPressed("A"))
+            x -= SPEED;
+        if (input.isKeyPressed("D"))
+            x += SPEED;
 
         // Colisiones con el mapa
-        if (y < 0) y = 0;
-        if (y > maxY - SIZE) y = maxY - SIZE;
-        if (x < minX) x = minX;
-        if (x > maxX - SIZE) x = maxX - SIZE;
+        if (y < 0)
+            y = 0;
+        if (y > maxY - SIZE)
+            y = maxY - SIZE;
+        if (x < minX)
+            x = minX;
+        if (x > maxX - SIZE)
+            x = maxX - SIZE;
 
         // Calcular ángulo hacia el mouse (Trigonometría Básica)
         double centerX = x + SIZE / 2;
@@ -48,7 +56,7 @@ public class Player {
         double centerY = y + SIZE / 2;
 
         gc.save(); // Guardamos el estado del lienzo
-        
+
         // Movemos el eje de rotación al centro del jugador
         gc.translate(centerX, centerY);
         gc.rotate(angle); // Rotamos el lienzo
@@ -64,10 +72,50 @@ public class Player {
         gc.restore(); // Restauramos el lienzo para que el resto del mapa no gire
     }
 
-    public double getCenterX() { return x + SIZE / 2; }
-    public double getCenterY() { return y + SIZE / 2; }
-    public double getAngle() { return angle; }
-    public int getLives() { return lives; }
-    public int getAmmo() { return ammo; }
-    public void reduceAmmo() { this.ammo--; }
+    // --- NUEVAS VARIABLES DE ESTADO ---
+    private int score = 0;
+
+    // --- MÉTODOS DE DAÑO Y PUNTUACIÓN ---
+    public void takeDamage() {
+        this.lives--;
+    }
+
+    public void addScore(int points) {
+        this.score += points;
+    }
+
+    public int getScore() {
+        return score;
+    }
+
+    // --- SISTEMA DE COLISIÓN (Hitbox) ---
+    // Verifica si la coordenada de la bala (px, py) está dentro del cuadrado del
+    // jugador
+    public boolean checkHit(double px, double py) {
+        return px > x && px < x + SIZE && py > y && py < y + SIZE;
+    }
+
+    public double getCenterX() {
+        return x + SIZE / 2;
+    }
+
+    public double getCenterY() {
+        return y + SIZE / 2;
+    }
+
+    public double getAngle() {
+        return angle;
+    }
+
+    public int getLives() {
+        return lives;
+    }
+
+    public int getAmmo() {
+        return ammo;
+    }
+
+    public void reduceAmmo() {
+        this.ammo--;
+    }
 }

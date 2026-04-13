@@ -2,6 +2,7 @@ package com.slingshot.ui;
 
 import com.slingshot.core.GameEngine;
 import com.slingshot.core.InputManager;
+import com.slingshot.entities.Crate;
 import com.slingshot.entities.Player;
 import com.slingshot.entities.Projectile;
 import javafx.animation.AnimationTimer;
@@ -27,6 +28,8 @@ public class GameWindow {
   public void setOnProjectileExitListener(OnProjectileExitListener listener) {
     this.exitListener = listener;
   }
+
+  private List<Crate> crates = new ArrayList<>();
 
   // --- NUEVAS VARIABLES DE DISPARO ---
   private boolean isCharging = false;
@@ -69,6 +72,7 @@ public class GameWindow {
     } catch (Exception e) {
     }
     this.localPlayer = new Player(startX, startY, skin);
+    generateCrates();
   }
 
   private void loadAssets() {
@@ -129,12 +133,40 @@ public class GameWindow {
     }
 
     // 4. Actualizar Balas
+    // 4. Actualizar Balas y Colisiones
     Iterator<Projectile> it = activeProjectiles.iterator();
     while (it.hasNext()) {
       Projectile p = it.next();
       p.update();
 
-      // LÓGICA DE RELEVO (Handover)
+      boolean projectileDestroyed = false;
+
+      // A) Verificar choque contra el Jugador Local
+      if (localPlayer.checkHit(p.getX(), p.getY())) {
+        System.out.println("¡TE DIERON!");
+        localPlayer.takeDamage();
+        projectileDestroyed = true;
+      }
+
+      // B) Verificar choque contra Cajas
+      for (Crate c : crates) {
+        if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
+            p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
+
+          if (c.getType().equals("indestructible")) {
+            // Las balas de artillería explotan. Las de francotirador podrían rebotar (por
+            // ahora las destruimos por simplicidad)
+            projectileDestroyed = true;
+          } else {
+            c.destroy();
+            localPlayer.addScore(10); // Te sumas puntos por romperla
+            projectileDestroyed = true;
+          }
+          break; // Salimos del for de cajas porque la bala ya chocó
+        }
+      }
+
+      // C) LÓGICA DE RELEVO (Handover a la otra pantalla)
       boolean exited = false;
       if (isHost && p.getX() > WIDTH)
         exited = true;
@@ -143,12 +175,11 @@ public class GameWindow {
 
       if (exited) {
         if (exitListener != null) {
-          // Enviamos la posición Y actual, el ángulo y la potencia original
           exitListener.onExit(p.getType(), p.getY(), p.getAngle(), p.getPower());
         }
         it.remove();
-      } else if (!p.isAlive()) {
-        it.remove(); // Borrar si chocó contra algo (techo/piso)
+      } else if (!p.isAlive() || projectileDestroyed) {
+        it.remove(); // Borrar si la bala "murió" o chocó contra algo
       }
     }
   }
@@ -203,6 +234,7 @@ public class GameWindow {
     gc.fillText("Vidas: " + localPlayer.getLives(), 20, 30);
     gc.fillText("Munición: " + localPlayer.getAmmo(), 20, 50);
     gc.fillText("Arma (Z/X): " + currentWeapon.toUpperCase(), 20, 70);
+    gc.fillText("PUNTOS: " + localPlayer.getScore(), 20, 90); // ¡NUEVO!
 
     // 4. Dibujar Línea de Apuntado (Láser)
     gc.setStroke(Color.rgb(255, 0, 0, 0.4));
@@ -220,6 +252,27 @@ public class GameWindow {
 
       gc.setFill(Color.rgb(231, 76, 60)); // Relleno barra roja
       gc.fillRect(localPlayer.getCenterX() - barWidth / 2, localPlayer.getCenterY() - 45, barWidth * chargePercent, 6);
+    }
+
+    // DIBUJAR CAJAS
+    for (Crate c : crates) {
+      c.render(gc);
+    }
+
+  }
+
+  private void generateCrates() {
+    java.util.Random rand = new java.util.Random();
+
+    // Las cajas solo aparecen en el 70% enemigo
+    double minX = isHost ? WIDTH * 0.30 : 0;
+    double maxX = isHost ? WIDTH : WIDTH * 0.70;
+
+    // Generamos 15 cajas aleatorias
+    for (int i = 0; i < 15; i++) {
+      double cx = minX + rand.nextDouble() * (maxX - minX - 40);
+      double cy = rand.nextDouble() * (HEIGHT - 40);
+      crates.add(new Crate(cx, cy));
     }
   }
 }
