@@ -1,12 +1,26 @@
 package com.slingshot.entities;
 
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 
 public class Barrier {
   private double x, y;
-  private final double size = 45.0; // Un poco más grande que las cajas
-  private int health = 4; // Sniper quita 1, Artillería quita 2
+  // Ahora es más delgada en X y alargada en Y
+  private final double width = 20.0;
+  private final double height = 80.0;
+  private int health = 4;
+
+  // Aquí cargaremos la imagen cuando la tengamos
+  public static Image barrierImage = null;
+
+  private static Image img;
+  static {
+    try {
+      img = new Image(Barrier.class.getResourceAsStream("/assets/barrier.png"));
+    } catch (Exception e) {
+    }
+  }
 
   public Barrier(double x, double y) {
     this.x = x;
@@ -25,15 +39,16 @@ public class Barrier {
   }
 
   public void render(GraphicsContext gc) {
-    // Visualmente se vuelve más oscura/transparente al dañarse
     double opacity = health / 4.0;
-    gc.setFill(Color.rgb(52, 152, 219, opacity)); // Un azul translúcido
-    gc.fillRect(x, y, size, size);
+    gc.setGlobalAlpha(opacity);
 
-    // Borde reforzado
-    gc.setStroke(Color.WHITE);
-    gc.setLineWidth(health); // El borde se adelgaza al dañarse
-    gc.strokeRect(x, y, size, size);
+    if (img != null) {
+      gc.drawImage(img, x, y, width, height); // La estiramos en Y
+    } else {
+      gc.setFill(Color.rgb(52, 152, 219));
+      gc.fillRect(x, y, width, height);
+    }
+    gc.setGlobalAlpha(1.0);
   }
 
   public double getX() {
@@ -44,7 +59,11 @@ public class Barrier {
     return y;
   }
 
-  public double getSize() {
-    return size;
-  }
+  public double getWidth() {
+    return width;
+  } // ¡NUEVO!
+
+  public double getHeight() {
+    return height;
+  } // ¡NUEVO!
 }

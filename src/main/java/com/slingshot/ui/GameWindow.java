@@ -7,6 +7,7 @@ import com.slingshot.entities.Barrier;
 import com.slingshot.entities.Crate;
 import com.slingshot.entities.DoubleScoreCrate;
 import com.slingshot.entities.EmptyCrate;
+import com.slingshot.entities.FloatingIndicator;
 import com.slingshot.entities.HealthCrate;
 import com.slingshot.entities.IndestructibleCrate;
 import com.slingshot.entities.Player;
@@ -26,6 +27,9 @@ import java.util.Iterator;
 import java.util.List;
 
 public class GameWindow {
+
+  private List<FloatingIndicator> floatingIndicators = new ArrayList<>();
+  private Image healthIcon, ammoIcon, doubleIcon;
 
   private double oppX = 0, oppY = 0; // Posición cruda del rival
   private long lastPosSend = 0; // Control de frecuencia de envío
@@ -106,6 +110,18 @@ public class GameWindow {
   private void loadAssets() {
     try {
       bgImage = new Image(getClass().getResourceAsStream("/assets/" + mapId + "_bg.png"));
+    } catch (Exception e) {
+    }
+    try {
+      healthIcon = new Image(getClass().getResourceAsStream("/assets/icon_health.png"));
+    } catch (Exception e) {
+    }
+    try {
+      ammoIcon = new Image(getClass().getResourceAsStream("/assets/icon_ammo.png"));
+    } catch (Exception e) {
+    }
+    try {
+      doubleIcon = new Image(getClass().getResourceAsStream("/assets/icon_double.png"));
     } catch (Exception e) {
     }
   }
@@ -194,6 +210,14 @@ public class GameWindow {
       }
     }
 
+    Iterator<FloatingIndicator> fIt = floatingIndicators.iterator();
+    while (fIt.hasNext()) {
+      FloatingIndicator fi = fIt.next();
+      fi.update();
+      if (!fi.isAlive())
+        fIt.remove();
+    }
+
     // 4. Actualizar Balas y Colisiones
     Iterator<Projectile> it = activeProjectiles.iterator();
     while (it.hasNext()) {
@@ -207,8 +231,8 @@ public class GameWindow {
         Iterator<Barrier> bIt = activeBarriers.iterator();
         while (bIt.hasNext()) {
           Barrier b = bIt.next();
-          if (p.getX() > b.getX() && p.getX() < b.getX() + b.getSize() &&
-              p.getY() > b.getY() && p.getY() < b.getY() + b.getSize()) {
+          if (p.getX() > b.getX() && p.getX() < b.getX() + b.getWidth() &&
+              p.getY() > b.getY() && p.getY() < b.getY() + b.getHeight()) {
 
             b.takeDamage(p.getType());
             projectileDestroyed = true;
@@ -342,7 +366,7 @@ public class GameWindow {
     // Mostramos el estado actual de selección
     String modoActivo = isBuildingMode ? "CONSTRUCCIÓN (C)" : "ARMA: " + currentWeapon.toUpperCase();
     gc.fillText(modoActivo, hudX, 120);
-    gc.fillText("Barreras: " + (MAX_BARRIERS-activeBarriers.size()), hudX, 140);
+    gc.fillText("Barreras: " + (MAX_BARRIERS - activeBarriers.size()), hudX, 140);
 
     // HUD de Doble Puntuación (Más grande y llamativo)
     if (localPlayer.isDoubleScoreActive()) {
@@ -376,6 +400,9 @@ public class GameWindow {
     // DIBUJAR CAJAS
     for (Crate c : crates) {
       c.render(gc);
+    }
+    for (FloatingIndicator fi : floatingIndicators) {
+      fi.render(gc);
     }
 
     for (Barrier b : activeBarriers) {
@@ -474,19 +501,26 @@ public class GameWindow {
   public void applyNetworkReward(String type, int amount) {
     if (localPlayer == null)
       return;
+    // Calculamos para que flote encima de nuestro jugador
+    double floatX = localPlayer.getCenterX() - 15;
+    double floatY = localPlayer.getCenterY() - 40;
 
     if (type.equals("AMMO")) {
       localPlayer.addAmmo(amount);
       System.out.println("[RECOMPENSA] +5 Balas");
+      floatingIndicators.add(new FloatingIndicator(floatX, floatY, "+" + amount, ammoIcon));
     } else if (type.equals("LIFE")) {
       localPlayer.addLife();
       System.out.println("[RECOMPENSA] +1 Vida");
+      floatingIndicators.add(new FloatingIndicator(floatX, floatY, "+1", healthIcon));
     } else if (type.equals("DOUBLE")) {
       localPlayer.activateDoubleScore(amount);
       System.out.println("[RECOMPENSA] ¡Puntos Dobles x8 Segundos!");
+      floatingIndicators.add(new FloatingIndicator(floatX - 20, floatY, "x2 PTS", doubleIcon));
     } else if (type.equals("SCORE")) {
       localPlayer.addScore(amount);
       System.out.println("[RECOMPENSA] +10 Puntos");
+      floatingIndicators.add(new FloatingIndicator(floatX, floatY, "+" + amount, null)); // Sin ícono, solo texto
     }
   }
 
