@@ -86,6 +86,16 @@ public class AppFX extends Application {
               }
             });
           }
+          if (message.startsWith("FIN_PARTIDA")) {
+            String[] tokens = message.split(";");
+            int scoreRival = Integer.parseInt(tokens[1]);
+
+            Platform.runLater(() -> {
+              if (gameWindow != null) {
+                gameWindow.recibirFinPartidaEnemigo(scoreRival);
+              }
+            });
+          }
         });
       });
 

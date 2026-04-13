@@ -25,6 +25,13 @@ import java.util.List;
 
 public class GameWindow {
 
+  private boolean isGameOver = false;
+  private String finalStatus = ""; // "GANASTE" o "PERDISTE"
+  private int opponentScore = -1; // -1 significa que aún no recibimos el dato
+
+  private long lastAmmoRegen = System.currentTimeMillis();
+  private final long AMMO_COOLDOWN = 5000; // 5 segundos para regenerar 1 bala
+
   private List<Barrier> activeBarriers = new ArrayList<>();
   private boolean isBuildingMode = false;
   private final int MAX_BARRIERS = 4; // Límite de construcción
@@ -118,6 +125,14 @@ public class GameWindow {
   }
 
   private void update() {
+    if (isGameOver)
+      return; // Detenemos todo si el juego acabó
+
+    // --- REGENERACIÓN AUTOMÁTICA DE MUNICIÓN ---
+    if (localPlayer.getAmmo() < 1 && System.currentTimeMillis() - lastAmmoRegen > AMMO_COOLDOWN) {
+      localPlayer.addAmmo(1);
+      lastAmmoRegen = System.currentTimeMillis();
+    }
     // 1. Selector de Armas
     if (inputManager.isKeyPressed("Z")) {
       currentWeapon = "sniper";
@@ -198,6 +213,7 @@ public class GameWindow {
       if (p.isEnemy() && localPlayer.checkHit(p.getX(), p.getY())) {
         localPlayer.takeDamage();
         projectileDestroyed = true;
+        engine.sendNetworkMessage("REWARD;SCORE;50");
       }
 
       // 2. Colisión con Cajas (SOLO SI ES ENEMIGA Y NO ES ARTILLERÍA)
@@ -262,6 +278,10 @@ public class GameWindow {
         isBuildingMode = false; // Salimos del modo tras ponerla
         // canShoot = false; // Opcional: evitar disparo accidental
       }
+    }
+    // --- DETECTAR SI ME QUEDÉ SIN VIDAS ---
+    if (localPlayer.getLives() <= 0) {
+      finalizarPartida();
     }
   }
 
@@ -370,6 +390,18 @@ public class GameWindow {
       gc.setFill(Color.LIGHTBLUE);
       gc.fillRect(inputManager.getMouseX() - 22, inputManager.getMouseY() - 22, 45, 45);
       gc.setGlobalAlpha(1.0);
+    }
+    if (isGameOver) {
+      gc.setFill(Color.rgb(0, 0, 0, 0.8)); // Fondo oscurecido
+      gc.fillRect(0, 0, WIDTH, HEIGHT);
+
+      gc.setFill(Color.WHITE);
+      gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 80));
+      gc.fillText(finalStatus, WIDTH / 2 - 200, HEIGHT / 2);
+
+      gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 30));
+      gc.fillText("Tu puntaje: " + localPlayer.getScore(), WIDTH / 2 - 120, HEIGHT / 2 + 60);
+      gc.fillText("Puntaje rival: " + (opponentScore == -1 ? "..." : opponentScore), WIDTH / 2 - 120, HEIGHT / 2 + 100);
     }
   }
 
@@ -499,6 +531,32 @@ public class GameWindow {
             crates.add(new EmptyCrate(cx, cy));
         }
       }
+    }
+  }
+
+  private void finalizarPartida() {
+    this.isGameOver = true;
+    // Enviamos nuestro puntaje al rival para que él pueda comparar
+    engine.sendNetworkMessage("FIN_PARTIDA;" + localPlayer.getScore());
+    verificarGanador();
+  }
+
+  public void recibirFinPartidaEnemigo(int scoreEnemigo) {
+    this.opponentScore = scoreEnemigo;
+    this.isGameOver = true;
+    verificarGanador();
+  }
+
+  private void verificarGanador() {
+    if (opponentScore == -1)
+      return; // Esperamos al otro paquete
+
+    if (localPlayer.getScore() > opponentScore) {
+      finalStatus = "¡VICTORIA!";
+    } else if (localPlayer.getScore() < opponentScore) {
+      finalStatus = "DERROTA";
+    } else {
+      finalStatus = "EMPATE";
     }
   }
 }
