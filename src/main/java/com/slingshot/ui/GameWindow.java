@@ -157,10 +157,32 @@ public class GameWindow {
         if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
             p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
 
-          // Delega la acción a la caja específica (Polimorfismo)
-          c.onHitByBullet(localPlayer, p);
+          // Ejecutamos la lógica de la caja y recibimos si la bala muere
+          boolean shouldDestroy = c.onHitByBullet(localPlayer, p);
 
-          projectileDestroyed = true;
+          if (shouldDestroy) {
+            projectileDestroyed = true;
+          }
+
+          // --- LÓGICA DE RED PARA RECOMPENSAS ---
+          // Si una bala ENEMIGA golpea MI caja, yo le aviso al enemigo sus premios
+          if (p.isEnemy()) {
+            String rewardMsg = "";
+            if (c instanceof AmmoCrate)
+              rewardMsg = "REWARD;AMMO;5";
+            else if (c instanceof HealthCrate)
+              rewardMsg = "REWARD;LIFE;1";
+            else if (c instanceof DoubleScoreCrate)
+              rewardMsg = "REWARD;DOUBLE;8";
+            else if (c instanceof EmptyCrate)
+              rewardMsg = "REWARD;SCORE;10";
+
+            if (!rewardMsg.isEmpty()) {
+              // Enviamos el paquete de recompensa al oponente
+              engine.sendNetworkMessage(rewardMsg);
+            }
+          }
+
           break;
         }
       }
@@ -283,6 +305,26 @@ public class GameWindow {
       } else {
         crates.add(new EmptyCrate(cx, cy)); // 50% (La normal)
       }
+    }
+  }
+
+  // --- MÉTODO PARA RECIBIR RECOMPENSAS DE LA RED ---
+  public void applyNetworkReward(String type, int amount) {
+    if (localPlayer == null)
+      return;
+
+    if (type.equals("AMMO")) {
+      localPlayer.addAmmo(amount);
+      System.out.println("[RECOMPENSA] +5 Balas");
+    } else if (type.equals("LIFE")) {
+      localPlayer.addLife();
+      System.out.println("[RECOMPENSA] +1 Vida");
+    } else if (type.equals("DOUBLE")) {
+      localPlayer.activateDoubleScore(amount);
+      System.out.println("[RECOMPENSA] ¡Puntos Dobles x8 Segundos!");
+    } else if (type.equals("SCORE")) {
+      localPlayer.addScore(amount);
+      System.out.println("[RECOMPENSA] +10 Puntos");
     }
   }
 }

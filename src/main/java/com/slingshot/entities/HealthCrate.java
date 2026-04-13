@@ -8,9 +8,9 @@ public class HealthCrate extends Crate {
     protected Color getColor() { return Color.LIGHTGREEN; }
 
     @Override
-    public void onHitByBullet(Player player, Projectile bullet) {
+    public boolean onHitByBullet(Player player, Projectile bullet) {
         player.addScore(10);     // Da puntos
         player.addLife();     
-        this.destroy();          // Se destruye
+        return true;          // Se destruye
     }
 }

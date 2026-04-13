@@ -8,8 +8,8 @@ public class EmptyCrate extends Crate {
     protected Color getColor() { return Color.SADDLEBROWN; } // Color madera
 
     @Override
-    public void onHitByBullet(Player player, Projectile bullet) {
+    public boolean onHitByBullet(Player player, Projectile bullet) {
         player.addScore(10); // Otorga los 10 puntos base
-        this.destroy();      // Se destruye
+        return true;     // Se destruye
     }
 }

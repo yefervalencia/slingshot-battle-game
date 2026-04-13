@@ -11,6 +11,8 @@ public class Player {
     private final double SPEED = 5.0;
     private Image skin;
     private double angle = 0; // Ángulo hacia donde mira
+    private int score = 0;
+    private long doubleScoreEndTime = 0;
 
     // Stats
     private int lives = 3;
@@ -72,16 +74,17 @@ public class Player {
         gc.restore(); // Restauramos el lienzo para que el resto del mapa no gire
     }
 
-    // --- NUEVAS VARIABLES DE ESTADO ---
-    private int score = 0;
-
     // --- MÉTODOS DE DAÑO Y PUNTUACIÓN ---
     public void takeDamage() {
         this.lives--;
     }
 
     public void addScore(int points) {
-        this.score += points;
+        if (isDoubleScoreActive()) {
+            this.score += (points * 2);
+        } else {
+            this.score += points;
+        }
     }
 
     public int getScore() {
@@ -101,6 +104,18 @@ public class Player {
     // jugador
     public boolean checkHit(double px, double py) {
         return px > x && px < x + SIZE && py > y && py < y + SIZE;
+    }
+
+    public void activateDoubleScore(int seconds) {
+        this.doubleScoreEndTime = System.currentTimeMillis() + (seconds * 1000);
+    }
+
+    public boolean isDoubleScoreActive() {
+        return System.currentTimeMillis() < doubleScoreEndTime;
+    }
+
+    public long getDoubleScoreTimeLeft() {
+        return Math.max(0, (doubleScoreEndTime - System.currentTimeMillis()) / 1000);
     }
 
     public double getCenterX() {

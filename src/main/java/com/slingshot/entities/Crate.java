@@ -26,7 +26,7 @@ public abstract class Crate {
   protected abstract Color getColor();
 
   // El método polimórfico: Cada caja decide qué hacer cuando le disparan
-  public abstract void onHitByBullet(Player player, Projectile bullet);
+  public abstract boolean onHitByBullet(Player player, Projectile bullet);
 
   public double getX() {
     return x;
