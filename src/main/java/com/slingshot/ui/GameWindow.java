@@ -2,9 +2,17 @@ package com.slingshot.ui;
 
 import com.slingshot.core.GameEngine;
 import com.slingshot.core.InputManager;
+import com.slingshot.entities.AmmoCrate;
+import com.slingshot.entities.Barrier;
 import com.slingshot.entities.Crate;
+import com.slingshot.entities.DoubleScoreCrate;
+import com.slingshot.entities.EmptyCrate;
+import com.slingshot.entities.HealthCrate;
+import com.slingshot.entities.IndestructibleCrate;
 import com.slingshot.entities.Player;
 import com.slingshot.entities.Projectile;
+import com.slingshot.network.NetworkProtocol;
+
 import javafx.animation.AnimationTimer;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
@@ -19,6 +27,21 @@ import java.util.List;
 
 public class GameWindow {
 
+  private double oppX = 0, oppY = 0; // Posición cruda del rival
+  private long lastPosSend = 0; // Control de frecuencia de envío
+
+  private boolean isGameOver = false;
+  private String finalStatus = ""; // "GANASTE" o "PERDISTE"
+  private int opponentScore = -1; // -1 significa que aún no recibimos el dato
+
+  private long lastAmmoRegen = System.currentTimeMillis();
+  private final long AMMO_COOLDOWN = 5000; // 5 segundos para regenerar 1 bala
+
+  private List<Barrier> activeBarriers = new ArrayList<>();
+  private boolean isBuildingMode = false;
+  private final int MAX_BARRIERS = 4; // Límite de construcción
+  private boolean canPlaceBarrier = true;
+
   public interface OnProjectileExitListener {
     void onExit(String type, double y, double angle, double power);
   }
@@ -30,6 +53,11 @@ public class GameWindow {
   }
 
   private List<Crate> crates = new ArrayList<>();
+
+  // --- VARIABLES DE ESCENARIO DINÁMICO ---
+  private long lastRegenTime = System.currentTimeMillis();
+  private final long REGEN_COOLDOWN = 60000; // Cada 10 segundos intenta regenerar
+  private final int MAX_CRATES = 25; // Límite máximo de cajas en el mapa
 
   // --- NUEVAS VARIABLES DE DISPARO ---
   private boolean isCharging = false;
@@ -103,36 +131,69 @@ public class GameWindow {
   }
 
   private void update() {
-    // 1. Selector de Armas
-    if (inputManager.isKeyPressed("Z"))
+    if (isGameOver)
+      return; // Detenemos todo si el juego acabó
+
+    // --- REGENERACIÓN AUTOMÁTICA DE MUNICIÓN ---
+    if (localPlayer.getAmmo() < 1 && System.currentTimeMillis() - lastAmmoRegen > AMMO_COOLDOWN) {
+      localPlayer.addAmmo(1);
+      lastAmmoRegen = System.currentTimeMillis();
+    }
+
+    // 1. Selector de Armas (ÚNICO Y EXCLUYENTE)
+    if (inputManager.isKeyPressed("Z")) {
       currentWeapon = "sniper";
-    if (inputManager.isKeyPressed("X"))
+      isBuildingMode = false;
+    }
+    if (inputManager.isKeyPressed("X")) {
       currentWeapon = "artillery";
+      isBuildingMode = false;
+    }
+    if (inputManager.isKeyPressed("C")) {
+      isBuildingMode = true; // Activa el modo construcción de forma segura
+    }
 
     // 2. Límites de movilidad
     double minX = isHost ? 0 : WIDTH * 0.70;
     double maxX = isHost ? WIDTH * 0.30 : WIDTH;
-
     localPlayer.update(inputManager, minX, maxX, HEIGHT);
 
-    // 3. Sistema de Disparo (Click sostenido y soltar)
-    if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
-      isCharging = true;
-      // Solo la artillería carga potencia. El francotirador dispara con potencia
-      // fija.
-      if (currentWeapon.equals("artillery")) {
-        chargePower += 0.4; // Velocidad de carga (puedes ajustarla)
-        if (chargePower > MAX_POWER)
-          chargePower = MAX_POWER; // Tope máximo
+    // 3. Sistema de Acción (Disparo vs Construcción)
+    if (!isBuildingMode) {
+      // MODO DISPARO
+      if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
+        isCharging = true;
+        if (currentWeapon.equals("artillery")) {
+          chargePower += 0.4;
+          if (chargePower > MAX_POWER)
+            chargePower = MAX_POWER;
+        }
+      } else if (isCharging) {
+        shoot();
+        isCharging = false;
+        chargePower = 5.0;
       }
-    } else if (isCharging) {
-      // El jugador SOLTÓ el click izquierdo. ¡Fuego!
-      shoot();
-      isCharging = false;
-      chargePower = 5.0; // Reseteamos la potencia para el siguiente tiro
+    } else {
+      // MODO CONSTRUCCIÓN (Con seguro anti-metralleta de 60FPS)
+      if (inputManager.isMousePressed()) {
+        if (canPlaceBarrier && activeBarriers.size() < MAX_BARRIERS) {
+          double mx = inputManager.getMouseX();
+          double my = inputManager.getMouseY();
+
+          double limit30 = WIDTH * 0.30;
+          double limit70 = WIDTH * 0.70;
+          boolean inValidZone = isHost ? (mx > limit30) : (mx < limit70);
+
+          if (inValidZone) {
+            activeBarriers.add(new com.slingshot.entities.Barrier(mx - 22, my - 22));
+            canPlaceBarrier = false; // Pone el seguro al hacer click
+          }
+        }
+      } else {
+        canPlaceBarrier = true; // Quita el seguro al soltar el click
+      }
     }
 
-    // 4. Actualizar Balas
     // 4. Actualizar Balas y Colisiones
     Iterator<Projectile> it = activeProjectiles.iterator();
     while (it.hasNext()) {
@@ -141,28 +202,43 @@ public class GameWindow {
 
       boolean projectileDestroyed = false;
 
-      // A) Verificar choque contra el Jugador Local
-      if (localPlayer.checkHit(p.getX(), p.getY())) {
-        System.out.println("¡TE DIERON!");
-        localPlayer.takeDamage();
-        projectileDestroyed = true;
+      // COLISIÓN CON BARRERAS
+      if (p.isEnemy()) {
+        Iterator<Barrier> bIt = activeBarriers.iterator();
+        while (bIt.hasNext()) {
+          Barrier b = bIt.next();
+          if (p.getX() > b.getX() && p.getX() < b.getX() + b.getSize() &&
+              p.getY() > b.getY() && p.getY() < b.getY() + b.getSize()) {
+
+            b.takeDamage(p.getType());
+            projectileDestroyed = true;
+            if (!b.isAlive())
+              bIt.remove();
+            break;
+          }
+        }
       }
 
-      // B) Verificar choque contra Cajas
-      for (Crate c : crates) {
-        if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
-            p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
+      // 1. Colisión con Jugador
+      if (p.isEnemy() && localPlayer.checkHit(p.getX(), p.getY())) {
+        localPlayer.takeDamage();
+        projectileDestroyed = true;
+        engine.sendNetworkMessage("REWARD;SCORE;50");
+      }
 
-          if (c.getType().equals("indestructible")) {
-            // Las balas de artillería explotan. Las de francotirador podrían rebotar (por
-            // ahora las destruimos por simplicidad)
-            projectileDestroyed = true;
-          } else {
-            c.destroy();
-            localPlayer.addScore(10); // Te sumas puntos por romperla
-            projectileDestroyed = true;
+      // 2. Colisión con Cajas
+      if (p.isEnemy() && !p.getType().equals("artillery")) {
+        for (Crate c : crates) {
+          if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
+              p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
+
+            boolean destruyeBala = c.onHitByBullet(null, p);
+            if (destruyeBala)
+              projectileDestroyed = true;
+
+            enviarRecompensaRed(c);
+            break;
           }
-          break; // Salimos del for de cajas porque la bala ya chocó
         }
       }
 
@@ -179,9 +255,31 @@ public class GameWindow {
         }
         it.remove();
       } else if (!p.isAlive() || projectileDestroyed) {
-        it.remove(); // Borrar si la bala "murió" o chocó contra algo
+        it.remove();
       }
     }
+
+    // 5. Lógica de Regeneración Dinámica
+    if (System.currentTimeMillis() - lastRegenTime > REGEN_COOLDOWN) {
+      lastRegenTime = System.currentTimeMillis();
+      regenerarMapa();
+    }
+
+    // --- DETECTAR SI ME QUEDÉ SIN VIDAS ---
+    if (localPlayer.getLives() <= 0) {
+      finalizarPartida();
+    }
+
+    // 6. Enviar posición al rival
+    if (System.currentTimeMillis() - lastPosSend > 50) {
+      engine.sendNetworkMessage(NetworkProtocol.formatPosition(localPlayer.getCenterX(), localPlayer.getCenterY()));
+      lastPosSend = System.currentTimeMillis();
+    }
+  }
+
+  public void updateOpponentPos(double x, double y) {
+    this.oppX = x;
+    this.oppY = y;
   }
 
   public void spawnRemoteProjectile(String type, double y, double angle, double power) {
@@ -190,14 +288,15 @@ public class GameWindow {
     double startX = isHost ? WIDTH : 0;
 
     // Creamos la bala con los datos recibidos
-    Projectile p = new Projectile(startX, y, angle, type, power, isHost);
+    Projectile p = new Projectile(startX, y, angle, type, power, isHost, true);
     activeProjectiles.add(p);
   }
 
   private void shoot() {
     localPlayer.reduceAmmo();
+    // Cuando TÚ disparas, isEnemy es FALSE
     Projectile p = new Projectile(localPlayer.getCenterX(), localPlayer.getCenterY(), localPlayer.getAngle(),
-        currentWeapon, chargePower, isHost);
+        currentWeapon, chargePower, isHost, false);
     activeProjectiles.add(p);
 
     // TODO: Fase 3 -> Enviar paquete UDP al oponente: "SHOOT;x;y;angulo;tipo"
@@ -205,6 +304,7 @@ public class GameWindow {
   }
 
   private void render() {
+    double hudX = isHost ? 20 : (WIDTH * 0.70) + 20;
     GraphicsContext gc = canvas.getGraphicsContext2D();
 
     // 1. Fondo y Zonas
@@ -231,10 +331,29 @@ public class GameWindow {
 
     // 3. HUD (Interfaz de usuario rápida)
     gc.setFill(Color.WHITE);
-    gc.fillText("Vidas: " + localPlayer.getLives(), 20, 30);
-    gc.fillText("Munición: " + localPlayer.getAmmo(), 20, 50);
-    gc.fillText("Arma (Z/X): " + currentWeapon.toUpperCase(), 20, 70);
-    gc.fillText("PUNTOS: " + localPlayer.getScore(), 20, 90); // ¡NUEVO!
+
+    // Configuramos una fuente más grande (20px) y gruesa (BOLD)
+    gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 20));
+
+    gc.fillText("Vidas: " + localPlayer.getLives(), hudX, 30);
+    gc.fillText("Munición: " + localPlayer.getAmmo(), hudX, 60); // Aumenté el espaciado Y
+    gc.fillText("Puntos: " + localPlayer.getScore(), hudX, 90);
+
+    // Mostramos el estado actual de selección
+    String modoActivo = isBuildingMode ? "CONSTRUCCIÓN (C)" : "ARMA: " + currentWeapon.toUpperCase();
+    gc.fillText(modoActivo, hudX, 120);
+    gc.fillText("Barreras: " + (MAX_BARRIERS-activeBarriers.size()), hudX, 140);
+
+    // HUD de Doble Puntuación (Más grande y llamativo)
+    if (localPlayer.isDoubleScoreActive()) {
+      gc.setFill(Color.PURPLE);
+      gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 22)); // Un poco más grande
+      gc.fillText("¡DOBLE PUNTUACIÓN! (" + localPlayer.getDoubleScoreTimeLeft() + "s)", hudX, 165);
+    }
+
+    // Resetear la fuente para otros elementos (como el láser o texto de depuración)
+    // si es necesario
+    gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.NORMAL, 12));
 
     // 4. Dibujar Línea de Apuntado (Láser)
     gc.setStroke(Color.rgb(255, 0, 0, 0.4));
@@ -259,20 +378,209 @@ public class GameWindow {
       c.render(gc);
     }
 
+    for (Barrier b : activeBarriers) {
+      b.render(gc);
+    }
+
+    // Dibujar preview si estamos en modo construcción
+    if (isBuildingMode) {
+      gc.setGlobalAlpha(0.3);
+      gc.setFill(Color.LIGHTBLUE);
+      gc.fillRect(inputManager.getMouseX() - 22, inputManager.getMouseY() - 22, 45, 45);
+      gc.setGlobalAlpha(1.0);
+    }
+    if (isGameOver) {
+      gc.setFill(Color.rgb(0, 0, 0, 0.8)); // Fondo oscurecido
+      gc.fillRect(0, 0, WIDTH, HEIGHT);
+
+      gc.setFill(Color.WHITE);
+      gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 80));
+      gc.fillText(finalStatus, WIDTH / 2 - 200, HEIGHT / 2);
+
+      gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 30));
+      gc.fillText("Tu puntaje: " + localPlayer.getScore(), WIDTH / 2 - 120, HEIGHT / 2 + 60);
+      gc.fillText("Puntaje rival: " + (opponentScore == -1 ? "..." : opponentScore), WIDTH / 2 - 120, HEIGHT / 2 + 100);
+    }
+
+    // --- RADAR DEL OPONENTE ---
+    double radarX = isHost ? WIDTH - 40 : 10; // Lado contrario al jugador
+
+    // A) INDICADOR LUMINOSO EN Y
+    gc.setFill(Color.rgb(255, 0, 0, 0.3)); // Fondo del riel
+    gc.fillRect(radarX + 10, 0, 10, HEIGHT);
+
+    gc.setFill(Color.LIME); // El "LED" indicador
+    gc.setEffect(new javafx.scene.effect.Bloom()); // Efecto de brillo si lo tienes disponible
+    gc.fillOval(radarX + 5, oppY - 10, 20, 20);
+    gc.setEffect(null);
+
+    // B) INDICADOR NUMÉRICO EN X (1 al 30)
+    // Calculamos qué tan profundo está el rival en su zona de 384px (30% de 1280)
+    double areaMovimiento = WIDTH * 0.30;
+    // Si es host, el rival está a la derecha (x de 896 a 1280).
+    // Si es cliente, el rival está a la izquierda (x de 0 a 384).
+    double xRelativa = isHost ? (WIDTH - oppX) : oppX;
+    int xSegmento = (int) ((xRelativa / areaMovimiento) * 29) + 1;
+    // Limitamos por seguridad
+    xSegmento = Math.max(1, Math.min(30, xSegmento));
+
+    gc.setFill(Color.WHITE);
+    gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 24));
+    gc.fillText("D:" + xSegmento, radarX - 20, oppY - 20);
   }
 
   private void generateCrates() {
     java.util.Random rand = new java.util.Random();
-
-    // Las cajas solo aparecen en el 70% enemigo
     double minX = isHost ? WIDTH * 0.30 : 0;
     double maxX = isHost ? WIDTH : WIDTH * 0.70;
 
-    // Generamos 15 cajas aleatorias
-    for (int i = 0; i < 15; i++) {
-      double cx = minX + rand.nextDouble() * (maxX - minX - 40);
-      double cy = rand.nextDouble() * (HEIGHT - 40);
-      crates.add(new Crate(cx, cy));
+    int creadas = 0;
+    int intentos = 0;
+    // Intentamos crear 15 cajas, pero con un límite de intentos para evitar bucles
+    // infinitos
+    while (creadas < 15 && intentos < 300) {
+      intentos++;
+      double cx = minX + rand.nextDouble() * (maxX - minX - 45);
+      double cy = rand.nextDouble() * (HEIGHT - 45);
+
+      // --- EVITAR SUPERPOSICIÓN ---
+      boolean superpuesta = false;
+      for (Crate existente : crates) {
+        // Verificamos si la distancia es menor al tamaño de la caja (con margen)
+        if (Math.abs(existente.getX() - cx) < 45 && Math.abs(existente.getY() - cy) < 45) {
+          superpuesta = true;
+          break;
+        }
+      }
+
+      if (!superpuesta) {
+        double prob = rand.nextDouble();
+        if (prob < 0.20)
+          crates.add(new IndestructibleCrate(cx, cy));
+        else if (prob < 0.30)
+          crates.add(new HealthCrate(cx, cy));
+        else if (prob < 0.40)
+          crates.add(new AmmoCrate(cx, cy));
+        else if (prob < 0.50)
+          crates.add(new DoubleScoreCrate(cx, cy));
+        else
+          crates.add(new EmptyCrate(cx, cy));
+        creadas++;
+      }
+    }
+  }
+
+  // --- MÉTODO PARA RECIBIR RECOMPENSAS DE LA RED ---
+  public void applyNetworkReward(String type, int amount) {
+    if (localPlayer == null)
+      return;
+
+    if (type.equals("AMMO")) {
+      localPlayer.addAmmo(amount);
+      System.out.println("[RECOMPENSA] +5 Balas");
+    } else if (type.equals("LIFE")) {
+      localPlayer.addLife();
+      System.out.println("[RECOMPENSA] +1 Vida");
+    } else if (type.equals("DOUBLE")) {
+      localPlayer.activateDoubleScore(amount);
+      System.out.println("[RECOMPENSA] ¡Puntos Dobles x8 Segundos!");
+    } else if (type.equals("SCORE")) {
+      localPlayer.addScore(amount);
+      System.out.println("[RECOMPENSA] +10 Puntos");
+    }
+  }
+
+  private void enviarRecompensaRed(Crate c) {
+    String msg = "";
+    if (c instanceof AmmoCrate)
+      msg = "REWARD;AMMO;5";
+    else if (c instanceof HealthCrate)
+      msg = "REWARD;LIFE;1";
+    else if (c instanceof DoubleScoreCrate)
+      msg = "REWARD;DOUBLE;8";
+    else if (c instanceof EmptyCrate)
+      msg = "REWARD;SCORE;10";
+
+    if (!msg.isEmpty()) {
+      engine.sendNetworkMessage(msg);
+    }
+  }
+
+  private void regenerarMapa() {
+    java.util.Random rand = new java.util.Random();
+    double minX = isHost ? WIDTH * 0.30 : 0;
+    double maxX = isHost ? WIDTH : WIDTH * 0.70;
+
+    // A) Mover las cajas indestructibles existentes
+    for (Crate c : crates) {
+      if (c instanceof IndestructibleCrate) {
+        double newX = minX + rand.nextDouble() * (maxX - minX - 45);
+        double newY = rand.nextDouble() * (HEIGHT - 45);
+        // Necesitas crear un setPos en Crate o acceder a x/y si son protected
+        c.setX(newX);
+        c.setY(newY);
+      }
+    }
+
+    // B) Si hay pocas cajas, crear nuevas (Solo si no excede el límite)
+    if (crates.size() < MAX_CRATES) {
+      int cuantasNuevas = 3; // Añadimos de a 3 por ciclo
+      for (int i = 0; i < cuantasNuevas; i++) {
+        if (crates.size() >= MAX_CRATES)
+          break;
+
+        double cx = minX + rand.nextDouble() * (maxX - minX - 45);
+        double cy = rand.nextDouble() * (HEIGHT - 45);
+
+        // Reutilizamos la lógica de colisión para que no nazcan una encima de otra
+        boolean superpuesta = false;
+        for (Crate existente : crates) {
+          if (Math.abs(existente.getX() - cx) < 45 && Math.abs(existente.getY() - cy) < 45) {
+            superpuesta = true;
+            break;
+          }
+        }
+
+        if (!superpuesta) {
+          double prob = rand.nextDouble();
+          // IMPORTANTE: Aquí solo creamos cajas DESTRUCTIBLES (porque las indestructibles
+          // son fijas)
+          if (prob < 0.15)
+            crates.add(new HealthCrate(cx, cy));
+          else if (prob < 0.30)
+            crates.add(new AmmoCrate(cx, cy));
+          else if (prob < 0.45)
+            crates.add(new DoubleScoreCrate(cx, cy));
+          else
+            crates.add(new EmptyCrate(cx, cy));
+        }
+      }
+    }
+  }
+
+  private void finalizarPartida() {
+    this.isGameOver = true;
+    // Enviamos nuestro puntaje al rival para que él pueda comparar
+    engine.sendNetworkMessage("FIN_PARTIDA;" + localPlayer.getScore());
+    verificarGanador();
+  }
+
+  public void recibirFinPartidaEnemigo(int scoreEnemigo) {
+    this.opponentScore = scoreEnemigo;
+    this.isGameOver = true;
+    verificarGanador();
+  }
+
+  private void verificarGanador() {
+    if (opponentScore == -1)
+      return; // Esperamos al otro paquete
+
+    if (localPlayer.getScore() > opponentScore) {
+      finalStatus = "¡VICTORIA!";
+    } else if (localPlayer.getScore() < opponentScore) {
+      finalStatus = "DERROTA";
+    } else {
+      finalStatus = "EMPATE";
     }
   }
 }

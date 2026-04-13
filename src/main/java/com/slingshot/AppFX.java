@@ -22,9 +22,10 @@ public class AppFX extends Application {
   private GameEngine gameEngine;
   private SetupWindow currentSetupWindow;
   private LobbyWindow lobbyWindow;
-  
-  // ¡CORRECCIÓN 1! Declaramos gameWindow a nivel global para que la red la pueda ver
-  private GameWindow gameWindow; 
+
+  // ¡CORRECCIÓN 1! Declaramos gameWindow a nivel global para que la red la pueda
+  // ver
+  private GameWindow gameWindow;
 
   private String lastTargetIp = "127.0.0.1";
   private int lastTargetPort = 5001;
@@ -33,7 +34,7 @@ public class AppFX extends Application {
 
   @Override
   public void start(Stage primaryStage) {
-    try { 
+    try {
       udpManager = new UDPManager();
       gameEngine = new GameEngine();
 
@@ -71,6 +72,42 @@ public class AppFX extends Application {
               gameWindow.spawnRemoteProjectile(type, entryY, angle, power);
             }
           }
+          // Dentro del observer de mensajes en AppFX.java
+          // RECIBIR RECOMPENSAS DE CAJAS ENEMIGAS
+          if (message.startsWith("REWARD")) {
+            String[] tokens = message.split(";");
+            String type = tokens[1];
+            int amount = Integer.parseInt(tokens[2]);
+
+            Platform.runLater(() -> {
+              // Le pasamos la recompensa a la ventana, ella sabrá qué hacer
+              if (gameWindow != null) {
+                gameWindow.applyNetworkReward(type, amount);
+              }
+            });
+          }
+          if (message.startsWith("FIN_PARTIDA")) {
+            String[] tokens = message.split(";");
+            int scoreRival = Integer.parseInt(tokens[1]);
+
+            Platform.runLater(() -> {
+              if (gameWindow != null) {
+                gameWindow.recibirFinPartidaEnemigo(scoreRival);
+              }
+            });
+          }
+          // RECIBIR POSICIÓN DEL RIVAL
+          if (message.startsWith("POS")) {
+            String[] tokens = message.split(";");
+            double ox = Double.parseDouble(tokens[1].replace(',', '.'));
+            double oy = Double.parseDouble(tokens[2].replace(',', '.'));
+
+            Platform.runLater(() -> {
+              if (gameWindow != null) {
+                gameWindow.updateOpponentPos(ox, oy);
+              }
+            });
+          }
         });
       });
 
@@ -93,13 +130,14 @@ public class AppFX extends Application {
           });
         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
           Platform.runLater(() -> {
-            
-            // ¡CORRECCIÓN 2! Usamos la variable global y le añadimos el Listener de salida de balas
+
+            // ¡CORRECCIÓN 2! Usamos la variable global y le añadimos el Listener de salida
+            // de balas
             gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
-            
+
             gameWindow.setOnProjectileExitListener((type, y, angle, power) -> {
-                String msg = NetworkProtocol.formatProjectile(type, y, angle, power);
-                udpManager.send(msg, lastTargetIp, lastTargetPort);
+              String msg = NetworkProtocol.formatProjectile(type, y, angle, power);
+              udpManager.send(msg, lastTargetIp, lastTargetPort);
             });
 
             primaryStage.setScene(gameWindow.createScene());

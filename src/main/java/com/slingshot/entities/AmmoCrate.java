@@ -1,11 +1,24 @@
 package com.slingshot.entities;
 
-class AmmoCrate extends CrateType {
-    public AmmoCrate() { super("AMMO", 1); }
+import javafx.scene.paint.Color;
+
+public class AmmoCrate extends Crate {
+    public AmmoCrate(double x, double y) {
+        super(x, y);
+    }
+
     @Override
-    public void applyEffect(Player player) {
-        // // Asumiendo que añadiremos un método addAmmo en Player
-        // player.setAmmo(player.getAmmo() + 5); 
-        // System.out.println("Munición extra recolectada!");
+    protected Color getColor() {
+        return Color.GOLD;
+    } // Llamativa
+
+    @Override
+    public boolean onHitByBullet(Player player, Projectile bullet) {
+        if (player != null) {
+            player.addScore(10);
+            player.addAmmo(5); // Te regala 5 balas
+        }
+        this.destroy();
+        return true;
     }
 }

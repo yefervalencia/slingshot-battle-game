@@ -1,10 +1,24 @@
 package com.slingshot.entities;
 
-class HealthCrate extends CrateType {
-    public HealthCrate() { super("HEALTH", 1); }
+import javafx.scene.paint.Color;
+
+public class HealthCrate extends Crate {
+    public HealthCrate(double x, double y) {
+        super(x, y);
+    }
+
     @Override
-    public void applyEffect(Player player) {
-        // player.takeDamage(-20); // Curar 20 de vida
-        // System.out.println("Salud restaurada para " + player.getUsername());
+    protected Color getColor() {
+        return Color.LIGHTGREEN;
+    }
+
+    @Override
+    public boolean onHitByBullet(Player player, Projectile bullet) {
+        if (player != null) {
+            player.addScore(10); // Da puntos
+            player.addLife();
+        }
+        this.destroy();
+        return true; // Se destruye
     }
 }

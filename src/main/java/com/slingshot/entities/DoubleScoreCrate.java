@@ -1,9 +1,24 @@
 package com.slingshot.entities;
 
-class DoubleScoreCrate extends CrateType {
-    public DoubleScoreCrate() { super("DOUBLE_SCORE", 1); }
+import javafx.scene.paint.Color;
+
+public class DoubleScoreCrate extends Crate {
+    public DoubleScoreCrate(double x, double y) {
+        super(x, y);
+    }
+
     @Override
-    public void applyEffect(Player player) {
-        // player.setScore(player.getScore() + 100);
+    protected Color getColor() {
+        return Color.PURPLE;
+    } // Color morado/épico
+
+    @Override
+    public boolean onHitByBullet(Player player, Projectile bullet) {
+        if (player != null) {
+            player.activateDoubleScore(8); // Activa por 8 segundos
+            player.addScore(10);
+        }
+        this.destroy();
+        return true; // La bala se destruye
     }
 }

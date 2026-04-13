@@ -11,6 +11,8 @@ public class Player {
     private final double SPEED = 5.0;
     private Image skin;
     private double angle = 0; // Ángulo hacia donde mira
+    private int score = 0;
+    private long doubleScoreEndTime = 0;
 
     // Stats
     private int lives = 3;
@@ -55,13 +57,16 @@ public class Player {
         double centerX = x + SIZE / 2;
         double centerY = y + SIZE / 2;
 
-        gc.save(); // Guardamos el estado del lienzo
-
-        // Movemos el eje de rotación al centro del jugador
+        gc.save();
         gc.translate(centerX, centerY);
-        gc.rotate(angle); // Rotamos el lienzo
+        gc.rotate(angle); // 1. Rotamos hacia el mouse
 
-        // Dibujamos al jugador (compensando la traslación previa)
+        // 2. MAGIA 2D: Si apuntamos a la izquierda, invertimos el eje Y para que no
+        // quede de cabeza
+        if (Math.abs(angle) > 90) {
+            gc.scale(1, -1);
+        }
+
         if (skin != null) {
             gc.drawImage(skin, -SIZE / 2, -SIZE / 2, SIZE, SIZE);
         } else {
@@ -69,11 +74,8 @@ public class Player {
             gc.fillRect(-SIZE / 2, -SIZE / 2, SIZE, SIZE);
         }
 
-        gc.restore(); // Restauramos el lienzo para que el resto del mapa no gire
+        gc.restore();
     }
-
-    // --- NUEVAS VARIABLES DE ESTADO ---
-    private int score = 0;
 
     // --- MÉTODOS DE DAÑO Y PUNTUACIÓN ---
     public void takeDamage() {
@@ -81,11 +83,23 @@ public class Player {
     }
 
     public void addScore(int points) {
-        this.score += points;
+        if (isDoubleScoreActive()) {
+            this.score += (points * 2);
+        } else {
+            this.score += points;
+        }
     }
 
     public int getScore() {
         return score;
+    }
+
+    public void addLife() {
+        this.lives++;
+    }
+
+    public void addAmmo(int amount) {
+        this.ammo += amount;
     }
 
     // --- SISTEMA DE COLISIÓN (Hitbox) ---
@@ -93,6 +107,18 @@ public class Player {
     // jugador
     public boolean checkHit(double px, double py) {
         return px > x && px < x + SIZE && py > y && py < y + SIZE;
+    }
+
+    public void activateDoubleScore(int seconds) {
+        this.doubleScoreEndTime = System.currentTimeMillis() + (seconds * 1000);
+    }
+
+    public boolean isDoubleScoreActive() {
+        return System.currentTimeMillis() < doubleScoreEndTime;
+    }
+
+    public long getDoubleScoreTimeLeft() {
+        return Math.max(0, (doubleScoreEndTime - System.currentTimeMillis()) / 1000);
     }
 
     public double getCenterX() {
