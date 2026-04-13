@@ -2,36 +2,84 @@ package com.slingshot.ui;
 
 import com.slingshot.core.GameEngine;
 import com.slingshot.core.InputManager;
+import com.slingshot.entities.Crate;
+import com.slingshot.entities.Player;
+import com.slingshot.entities.Projectile;
 import javafx.animation.AnimationTimer;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.image.Image;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 public class GameWindow {
+
+  public interface OnProjectileExitListener {
+    void onExit(String type, double y, double angle, double power);
+  }
+
+  private OnProjectileExitListener exitListener;
+
+  public void setOnProjectileExitListener(OnProjectileExitListener listener) {
+    this.exitListener = listener;
+  }
+
+  private List<Crate> crates = new ArrayList<>();
+
+  // --- NUEVAS VARIABLES DE DISPARO ---
+  private boolean isCharging = false;
+  private double chargePower = 5.0; // Potencia base
+  private final double MAX_POWER = 28.0; // Límite de potencia de artillería
+
   private GameEngine engine;
   private boolean isHost;
+  private String mapId, charId;
+
   private Canvas canvas;
   private InputManager inputManager;
-
-  // Constantes del mapa
   private final double WIDTH = 1280;
   private final double HEIGHT = 720;
 
-  // Posición del jugador (Temporal, luego vivirá en Player.java)
-  private double playerX;
-  private double playerY = HEIGHT / 2;
-  private final double PLAYER_SPEED = 5.0;
-  private final double PLAYER_SIZE = 40.0;
+  // Entidades
+  private Image bgImage;
+  private Player localPlayer;
+  private List<Projectile> activeProjectiles = new ArrayList<>();
 
-  public GameWindow(GameEngine engine, boolean isHost) {
+  // Controles de disparo
+  private boolean canShoot = true;
+  private String currentWeapon = "sniper"; // Por defecto Z
+
+  public GameWindow(GameEngine engine, boolean isHost, String mapId, String charId) {
     this.engine = engine;
     this.isHost = isHost;
+    this.mapId = mapId;
+    this.charId = charId;
     this.inputManager = new InputManager();
 
-    // Spawn inicial dependiendo del rol
-    this.playerX = isHost ? 100 : WIDTH - 100;
+    loadAssets();
+
+    // Inicializar Jugador
+    double startX = isHost ? 100 : WIDTH - 150;
+    double startY = HEIGHT / 2;
+    Image skin = null;
+    try {
+      skin = new Image(getClass().getResourceAsStream("/assets/" + charId + "_skin.png"));
+    } catch (Exception e) {
+    }
+    this.localPlayer = new Player(startX, startY, skin);
+    generateCrates();
+  }
+
+  private void loadAssets() {
+    try {
+      bgImage = new Image(getClass().getResourceAsStream("/assets/" + mapId + "_bg.png"));
+    } catch (Exception e) {
+    }
   }
 
   public Scene createScene() {
@@ -42,12 +90,11 @@ public class GameWindow {
     Scene scene = new Scene(root, WIDTH, HEIGHT);
     inputManager.attachToScene(scene);
 
-    // GAME LOOP - 60 FPS
     AnimationTimer timer = new AnimationTimer() {
       @Override
       public void handle(long now) {
-        update(); // 1. Matemáticas y lógicas
-        render(); // 2. Dibujar en pantalla
+        update();
+        render();
       }
     };
     timer.start();
@@ -56,71 +103,176 @@ public class GameWindow {
   }
 
   private void update() {
-    // --- MOVIMIENTO DEL JUGADOR ---
-    if (inputManager.isKeyPressed("W"))
-      playerY -= PLAYER_SPEED;
-    if (inputManager.isKeyPressed("S"))
-      playerY += PLAYER_SPEED;
-    if (inputManager.isKeyPressed("A"))
-      playerX -= PLAYER_SPEED;
-    if (inputManager.isKeyPressed("D"))
-      playerX += PLAYER_SPEED;
+    // 1. Selector de Armas
+    if (inputManager.isKeyPressed("Z"))
+      currentWeapon = "sniper";
+    if (inputManager.isKeyPressed("X"))
+      currentWeapon = "artillery";
 
-    // --- COLISIONES CON EL MAPA (LÍMITES) ---
-    // Límite Y (Piso y Techo)
-    if (playerY < 0)
-      playerY = 0;
-    if (playerY > HEIGHT - PLAYER_SIZE)
-      playerY = HEIGHT - PLAYER_SIZE;
+    // 2. Límites de movilidad
+    double minX = isHost ? 0 : WIDTH * 0.70;
+    double maxX = isHost ? WIDTH * 0.30 : WIDTH;
 
-    // Límite X (El muro invisible del 30%)
-    double limit30Percent = WIDTH * 0.30; // 384 px
-    double limit70Percent = WIDTH * 0.70; // 896 px
+    localPlayer.update(inputManager, minX, maxX, HEIGHT);
 
-    if (isHost) {
-      // El Host no puede pasar del 30% hacia la derecha
-      if (playerX < 0)
-        playerX = 0;
-      if (playerX > limit30Percent - PLAYER_SIZE)
-        playerX = limit30Percent - PLAYER_SIZE;
-    } else {
-      // El Cliente no puede pasar del 70% hacia la izquierda
-      if (playerX < limit70Percent)
-        playerX = limit70Percent;
-      if (playerX > WIDTH - PLAYER_SIZE)
-        playerX = WIDTH - PLAYER_SIZE;
+    // 3. Sistema de Disparo (Click sostenido y soltar)
+    if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
+      isCharging = true;
+      // Solo la artillería carga potencia. El francotirador dispara con potencia
+      // fija.
+      if (currentWeapon.equals("artillery")) {
+        chargePower += 0.4; // Velocidad de carga (puedes ajustarla)
+        if (chargePower > MAX_POWER)
+          chargePower = MAX_POWER; // Tope máximo
+      }
+    } else if (isCharging) {
+      // El jugador SOLTÓ el click izquierdo. ¡Fuego!
+      shoot();
+      isCharging = false;
+      chargePower = 5.0; // Reseteamos la potencia para el siguiente tiro
     }
+
+    // 4. Actualizar Balas
+    // 4. Actualizar Balas y Colisiones
+    Iterator<Projectile> it = activeProjectiles.iterator();
+    while (it.hasNext()) {
+      Projectile p = it.next();
+      p.update();
+
+      boolean projectileDestroyed = false;
+
+      // A) Verificar choque contra el Jugador Local
+      if (localPlayer.checkHit(p.getX(), p.getY())) {
+        System.out.println("¡TE DIERON!");
+        localPlayer.takeDamage();
+        projectileDestroyed = true;
+      }
+
+      // B) Verificar choque contra Cajas
+      for (Crate c : crates) {
+        if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
+            p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
+
+          if (c.getType().equals("indestructible")) {
+            // Las balas de artillería explotan. Las de francotirador podrían rebotar (por
+            // ahora las destruimos por simplicidad)
+            projectileDestroyed = true;
+          } else {
+            c.destroy();
+            localPlayer.addScore(10); // Te sumas puntos por romperla
+            projectileDestroyed = true;
+          }
+          break; // Salimos del for de cajas porque la bala ya chocó
+        }
+      }
+
+      // C) LÓGICA DE RELEVO (Handover a la otra pantalla)
+      boolean exited = false;
+      if (isHost && p.getX() > WIDTH)
+        exited = true;
+      if (!isHost && p.getX() < 0)
+        exited = true;
+
+      if (exited) {
+        if (exitListener != null) {
+          exitListener.onExit(p.getType(), p.getY(), p.getAngle(), p.getPower());
+        }
+        it.remove();
+      } else if (!p.isAlive() || projectileDestroyed) {
+        it.remove(); // Borrar si la bala "murió" o chocó contra algo
+      }
+    }
+  }
+
+  public void spawnRemoteProjectile(String type, double y, double angle, double power) {
+    // Si soy Host, la bala entra por la derecha (X=1280).
+    // Si soy Cliente, entra por la izquierda (X=0).
+    double startX = isHost ? WIDTH : 0;
+
+    // Creamos la bala con los datos recibidos
+    Projectile p = new Projectile(startX, y, angle, type, power, isHost);
+    activeProjectiles.add(p);
+  }
+
+  private void shoot() {
+    localPlayer.reduceAmmo();
+    Projectile p = new Projectile(localPlayer.getCenterX(), localPlayer.getCenterY(), localPlayer.getAngle(),
+        currentWeapon, chargePower, isHost);
+    activeProjectiles.add(p);
+
+    // TODO: Fase 3 -> Enviar paquete UDP al oponente: "SHOOT;x;y;angulo;tipo"
+    System.out.println("[Disparo] " + currentWeapon + " -> Munición restante: " + localPlayer.getAmmo());
   }
 
   private void render() {
     GraphicsContext gc = canvas.getGraphicsContext2D();
 
-    // 1. Dibujar Cielo/Fondo
-    gc.setFill(Color.web("#2c3e50"));
-    gc.fillRect(0, 0, WIDTH, HEIGHT);
-
-    // 2. Dibujar Guías Visuales de Zonas (Solo para desarrollo)
-    double limit30 = WIDTH * 0.30;
-    double limit70 = WIDTH * 0.70;
-
-    if (isHost) {
-      gc.setFill(Color.rgb(46, 204, 113, 0.2)); // Verde (Mi zona 30%)
-      gc.fillRect(0, 0, limit30, HEIGHT);
-      gc.setFill(Color.rgb(231, 76, 60, 0.1)); // Rojo suave (Zona cajas 70%)
-      gc.fillRect(limit30, 0, WIDTH - limit30, HEIGHT);
-    } else {
-      gc.setFill(Color.rgb(231, 76, 60, 0.1)); // Rojo suave (Zona cajas 70%)
-      gc.fillRect(0, 0, limit70, HEIGHT);
-      gc.setFill(Color.rgb(46, 204, 113, 0.2)); // Verde (Mi zona 30%)
-      gc.fillRect(limit70, 0, WIDTH - limit70, HEIGHT);
+    // 1. Fondo y Zonas
+    if (bgImage != null)
+      gc.drawImage(bgImage, 0, 0, WIDTH, HEIGHT);
+    else {
+      gc.setFill(Color.web("#2c3e50"));
+      gc.fillRect(0, 0, WIDTH, HEIGHT);
     }
 
-    // 3. Dibujar al Jugador Local
-    gc.setFill(isHost ? Color.BLUE : Color.ORANGE);
-    gc.fillRect(playerX, playerY, PLAYER_SIZE, PLAYER_SIZE);
+    double limit30 = WIDTH * 0.30;
+    double limit70 = WIDTH * 0.70;
+    gc.setFill(Color.rgb(255, 0, 0, 0.15));
+    if (isHost)
+      gc.fillRect(limit30, 0, WIDTH - limit30, HEIGHT);
+    else
+      gc.fillRect(0, 0, limit70, HEIGHT);
 
-    // Etiqueta sobre el jugador
+    // 2. Entidades
+    localPlayer.render(gc);
+    for (Projectile p : activeProjectiles) {
+      p.render(gc);
+    }
+
+    // 3. HUD (Interfaz de usuario rápida)
     gc.setFill(Color.WHITE);
-    gc.fillText(isHost ? "HOST" : "CLIENTE", playerX, playerY - 10);
+    gc.fillText("Vidas: " + localPlayer.getLives(), 20, 30);
+    gc.fillText("Munición: " + localPlayer.getAmmo(), 20, 50);
+    gc.fillText("Arma (Z/X): " + currentWeapon.toUpperCase(), 20, 70);
+    gc.fillText("PUNTOS: " + localPlayer.getScore(), 20, 90); // ¡NUEVO!
+
+    // 4. Dibujar Línea de Apuntado (Láser)
+    gc.setStroke(Color.rgb(255, 0, 0, 0.4));
+    gc.setLineWidth(2);
+    gc.strokeLine(localPlayer.getCenterX(), localPlayer.getCenterY(), inputManager.getMouseX(),
+        inputManager.getMouseY());
+
+    // 5. Dibujar Barra de Carga de Artillería sobre el jugador
+    if (isCharging && currentWeapon.equals("artillery")) {
+      double barWidth = 50;
+      double chargePercent = chargePower / MAX_POWER;
+
+      gc.setFill(Color.rgb(0, 0, 0, 0.5)); // Fondo barra
+      gc.fillRect(localPlayer.getCenterX() - barWidth / 2, localPlayer.getCenterY() - 45, barWidth, 6);
+
+      gc.setFill(Color.rgb(231, 76, 60)); // Relleno barra roja
+      gc.fillRect(localPlayer.getCenterX() - barWidth / 2, localPlayer.getCenterY() - 45, barWidth * chargePercent, 6);
+    }
+
+    // DIBUJAR CAJAS
+    for (Crate c : crates) {
+      c.render(gc);
+    }
+
+  }
+
+  private void generateCrates() {
+    java.util.Random rand = new java.util.Random();
+
+    // Las cajas solo aparecen en el 70% enemigo
+    double minX = isHost ? WIDTH * 0.30 : 0;
+    double maxX = isHost ? WIDTH : WIDTH * 0.70;
+
+    // Generamos 15 cajas aleatorias
+    for (int i = 0; i < 15; i++) {
+      double cx = minX + rand.nextDouble() * (maxX - minX - 40);
+      double cy = rand.nextDouble() * (HEIGHT - 40);
+      crates.add(new Crate(cx, cy));
+    }
   }
 }

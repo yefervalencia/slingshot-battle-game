@@ -7,8 +7,8 @@ public class EmptyCrate extends CrateType {
 
     @Override
     public void applyEffect(Player player) {
-        // Según tu regla: Da 10 puntos de puntaje
-        player.setScore(player.getScore() + 10);
-        System.out.println("Caja vacía: +10 puntos para " + player.getUsername());
+        // // Según tu regla: Da 10 puntos de puntaje
+        // player.setScore(player.getScore() + 10);
+        // System.out.println("Caja vacía: +10 puntos para " + player.getUsername());
     }
 }

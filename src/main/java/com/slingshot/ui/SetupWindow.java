@@ -16,6 +16,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SetupWindow {
+
+  public interface OnSetupCompleteListener {
+    void onSetupComplete(String mapId, String characterId);
+  }
+
+  private OnSetupCompleteListener setupListener;
+
+  public void setOnSetupCompleteListener(OnSetupCompleteListener listener) {
+    this.setupListener = listener;
+  }
+
   private UDPManager udpManager;
   private String targetIp;
   private int targetPort;
@@ -94,6 +105,8 @@ public class SetupWindow {
         GameCharacter selectedChar = (GameCharacter) charGroup.getSelectedToggle().getUserData();
         MapOption selectedMap = (MapOption) mapGroup.getSelectedToggle().getUserData();
 
+        if (setupListener != null) setupListener.onSetupComplete(selectedMap.getId(), selectedChar.getId());
+
         String msg = NetworkProtocol.formatSetupPC1(selectedMap.getId(), selectedChar.getId(), txtName.getText());
         udpManager.send(msg, targetIp, targetPort);
         lockUI("Esperando al Cliente...");
@@ -108,6 +121,10 @@ public class SetupWindow {
 
       btnAction.setOnAction(e -> {
         GameCharacter selectedChar = (GameCharacter) charGroup.getSelectedToggle().getUserData();
+        MapOption selectedMap = (MapOption) mapGroup.getSelectedToggle().getUserData();
+
+        if (setupListener != null) setupListener.onSetupComplete(selectedMap.getId(), selectedChar.getId());
+
         udpManager.send("READY_PC2;" + selectedChar.getId() + ";" + txtName.getText(), targetIp, targetPort);
         lockUI("¡Listo! Esperando inicio...");
       });

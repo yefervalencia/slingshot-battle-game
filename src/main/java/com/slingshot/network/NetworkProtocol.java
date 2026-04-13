@@ -1,5 +1,7 @@
 package com.slingshot.network;
 
+import java.util.Locale;
+
 import com.slingshot.core.GameEngine;
 
 public class NetworkProtocol {
@@ -17,6 +19,11 @@ public class NetworkProtocol {
         return "TURN_END" + SEPARATOR + nextPlayer;
     }
 
+    public static String formatProjectile(String type, double y, double angle, double power) {
+        // Usamos Locale.US para forzar el punto decimal en lugar de la coma
+        return String.format(Locale.US, "BULLET;%s;%.2f;%.2f;%.2f", type, y, angle, power);
+    }
+
     public static void processMessage(String rawMessage, GameEngine engine) {
         if (rawMessage == null || rawMessage.trim().isEmpty()) {
             return;
@@ -27,8 +34,9 @@ public class NetworkProtocol {
         String command = tokens[0];
 
         try {
-            // 2. MAGIA DE SOLID: El protocolo ya NO hace un switch. 
-            // Solo le avisa al motor que llegó algo, y el Motor (a través de su Estado) decide qué hacer.
+            // 2. MAGIA DE SOLID: El protocolo ya NO hace un switch.
+            // Solo le avisa al motor que llegó algo, y el Motor (a través de su Estado)
+            // decide qué hacer.
             engine.processNetworkMessage(command, tokens);
 
         } catch (Exception e) {
