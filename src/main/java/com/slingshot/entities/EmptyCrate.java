@@ -16,8 +16,9 @@ public class EmptyCrate extends Crate {
     public boolean onHitByBullet(Player player, Projectile bullet) {
         if (player != null) {
             player.addScore(10); // Otorga los 10 puntos base
-            this.destroy();
+            
         }
+        this.destroy();
         return true; // Se destruye
     }
 }

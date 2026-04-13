@@ -36,6 +36,11 @@ public class GameWindow {
 
   private List<Crate> crates = new ArrayList<>();
 
+  // --- VARIABLES DE ESCENARIO DINÁMICO ---
+  private long lastRegenTime = System.currentTimeMillis();
+  private final long REGEN_COOLDOWN = 60000; // Cada 10 segundos intenta regenerar
+  private final int MAX_CRATES = 25; // Límite máximo de cajas en el mapa
+
   // --- NUEVAS VARIABLES DE DISPARO ---
   private boolean isCharging = false;
   private double chargePower = 5.0; // Potencia base
@@ -185,6 +190,12 @@ public class GameWindow {
       } else if (!p.isAlive() || projectileDestroyed) {
         it.remove(); // Borrar si la bala "murió" o chocó contra algo
       }
+    }
+
+    // 5. Lógica de Regeneración Dinámica
+    if (System.currentTimeMillis() - lastRegenTime > REGEN_COOLDOWN) {
+      lastRegenTime = System.currentTimeMillis();
+      regenerarMapa();
     }
   }
 
@@ -346,6 +357,58 @@ public class GameWindow {
 
     if (!msg.isEmpty()) {
       engine.sendNetworkMessage(msg);
+    }
+  }
+
+  private void regenerarMapa() {
+    java.util.Random rand = new java.util.Random();
+    double minX = isHost ? WIDTH * 0.30 : 0;
+    double maxX = isHost ? WIDTH : WIDTH * 0.70;
+
+    // A) Mover las cajas indestructibles existentes
+    for (Crate c : crates) {
+      if (c instanceof IndestructibleCrate) {
+        double newX = minX + rand.nextDouble() * (maxX - minX - 45);
+        double newY = rand.nextDouble() * (HEIGHT - 45);
+        // Necesitas crear un setPos en Crate o acceder a x/y si son protected
+        c.setX(newX);
+        c.setY(newY);
+      }
+    }
+
+    // B) Si hay pocas cajas, crear nuevas (Solo si no excede el límite)
+    if (crates.size() < MAX_CRATES) {
+      int cuantasNuevas = 3; // Añadimos de a 3 por ciclo
+      for (int i = 0; i < cuantasNuevas; i++) {
+        if (crates.size() >= MAX_CRATES)
+          break;
+
+        double cx = minX + rand.nextDouble() * (maxX - minX - 45);
+        double cy = rand.nextDouble() * (HEIGHT - 45);
+
+        // Reutilizamos la lógica de colisión para que no nazcan una encima de otra
+        boolean superpuesta = false;
+        for (Crate existente : crates) {
+          if (Math.abs(existente.getX() - cx) < 45 && Math.abs(existente.getY() - cy) < 45) {
+            superpuesta = true;
+            break;
+          }
+        }
+
+        if (!superpuesta) {
+          double prob = rand.nextDouble();
+          // IMPORTANTE: Aquí solo creamos cajas DESTRUCTIBLES (porque las indestructibles
+          // son fijas)
+          if (prob < 0.15)
+            crates.add(new HealthCrate(cx, cy));
+          else if (prob < 0.30)
+            crates.add(new AmmoCrate(cx, cy));
+          else if (prob < 0.45)
+            crates.add(new DoubleScoreCrate(cx, cy));
+          else
+            crates.add(new EmptyCrate(cx, cy));
+        }
+      }
     }
   }
 }
