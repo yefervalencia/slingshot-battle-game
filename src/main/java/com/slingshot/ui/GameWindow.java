@@ -15,12 +15,18 @@ import com.slingshot.entities.Projectile;
 import com.slingshot.network.NetworkProtocol;
 
 import javafx.animation.AnimationTimer;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.Button;
 import javafx.scene.image.Image;
-import javafx.scene.layout.Pane;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -57,6 +63,11 @@ public class GameWindow {
   }
 
   private List<Crate> crates = new ArrayList<>();
+
+  private int gameTimeSeconds = 600; // 10 minutos
+  private long lastTimerUpdate = System.currentTimeMillis();
+  private boolean isPaused = false;
+  private double opponentScoreDisplay = 0; // Para mostrar puntaje rival en tiempo real
 
   // --- VARIABLES DE ESCENARIO DINÁMICO ---
   private long lastRegenTime = System.currentTimeMillis();
@@ -127,9 +138,19 @@ public class GameWindow {
   }
 
   public Scene createScene() {
-    Pane root = new Pane();
+    StackPane root = new StackPane();
     canvas = new Canvas(WIDTH, HEIGHT);
-    root.getChildren().add(canvas);
+
+    // Botón Pausa
+    Button btnPause = new Button("II");
+    btnPause.setStyle(
+        "-fx-background-color: #f39c12; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 20; -fx-background-radius: 10;");
+    btnPause.setOnAction(e -> showPauseMenu());
+
+    StackPane.setAlignment(btnPause, isHost ? Pos.TOP_LEFT : Pos.TOP_RIGHT);
+    StackPane.setMargin(btnPause, new Insets(10));
+
+    root.getChildren().addAll(canvas, btnPause);
 
     Scene scene = new Scene(root, WIDTH, HEIGHT);
     inputManager.attachToScene(scene);
@@ -146,9 +167,41 @@ public class GameWindow {
     return scene;
   }
 
+  private void showPauseMenu() {
+    isPaused = true;
+    VBox menu = new VBox(15);
+    menu.setAlignment(Pos.CENTER);
+    menu.setStyle("-fx-background-color: rgba(0,0,0,0.8); -fx-padding: 40;");
+
+    Button btnControls = UIFactory.createMenuButton("CONTROLES", "#3498db", () -> {
+      CustomAlert.show("Controles", "Z: Sniper\nX: Artillería\nC: Construir\nMouse: Apuntar/Disparar", null);
+    });
+    Button btnPoints = UIFactory.createMenuButton("PUNTOS", "#f1c40f", () -> {
+      CustomAlert.show("Puntuación", "Tu: " + localPlayer.getScore() + "\nRival: " + opponentScore, null);
+    });
+    Button btnQuit = UIFactory.createMenuButton("ABANDONAR", "#e74c3c", () -> {
+      engine.sendNetworkMessage("PLAYER_QUIT_GAME");
+      // Devolver al home vía AppFX (necesitas un listener)
+    });
+    Button btnResume = UIFactory.createMenuButton("RESUMIR", "#2ecc71", () -> {
+      isPaused = false;
+      // Eliminar este menú del root si lo agregas como nodo
+    });
+
+    // ... Lógica para mostrar este menú sobre el canvas ...
+
+  }
+
   private void update() {
-    if (isGameOver)
-      return; // Detenemos todo si el juego acabó
+    if (isGameOver || isPaused)
+      return;
+
+    if (System.currentTimeMillis() - lastTimerUpdate > 1000) {
+      gameTimeSeconds--;
+      lastTimerUpdate = System.currentTimeMillis();
+      if (gameTimeSeconds <= 0)
+        finalizarPartida();
+    }
 
     // --- REGENERACIÓN AUTOMÁTICA DE MUNICIÓN ---
     if (localPlayer.getAmmo() < 1 && System.currentTimeMillis() - lastAmmoRegen > AMMO_COOLDOWN) {
@@ -454,6 +507,15 @@ public class GameWindow {
     gc.setFill(Color.WHITE);
     gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 24));
     gc.fillText("D:" + xSegmento, radarX - 20, oppY - 20);
+
+    String timeStr = String.format("%02d:%02d", gameTimeSeconds / 60, gameTimeSeconds % 60);
+    gc.setFill(Color.WHITE);
+    gc.setFont(Font.font("Arial", FontWeight.BOLD, 30));
+    gc.setStroke(Color.BLACK);
+    gc.setLineWidth(1);
+    gc.fillText(timeStr, WIDTH / 2 - 40, 40);
+    gc.strokeText(timeStr, WIDTH / 2 - 40, 40);
+
   }
 
   private void generateCrates() {
