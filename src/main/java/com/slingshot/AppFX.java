@@ -43,6 +43,9 @@ public class AppFX extends Application {
   public void start(Stage primaryStage) {
     this.primaryStage = primaryStage; // Guardamos la referencia
 
+    // ¡INICIAR LA MÚSICA DE FONDO!
+    com.slingshot.core.SoundManager.getInstance().playBGM();
+
     try {
       udpManager = new UDPManager();
       gameEngine = new GameEngine();
@@ -150,6 +153,22 @@ public class AppFX extends Application {
               }
             });
           }
+          // SI EL RIVAL ABANDONA EN MEDIO DE LA PARTIDA
+          if (message.equals("PLAYER_QUIT_MATCH")) {
+            Platform.runLater(() -> {
+              CustomAlert.show("Conexión Perdida", "El rival ha abandonado la partida en curso.", () -> {
+                showHome(); // Nos saca al inicio a nosotros también
+              });
+            });
+          }
+          if (message.equals("PLAYER_QUIT_GAME")) {
+            Platform.runLater(() -> {
+              // El rival ve esto cuando tú abandonas
+              CustomAlert.show("Conexión Perdida", "El rival ha abandonado la partida.", () -> {
+                showHome();
+              });
+            });
+          }
         });
       });
 
@@ -176,8 +195,30 @@ public class AppFX extends Application {
           });
         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
           Platform.runLater(() -> {
+
+            com.slingshot.core.SoundManager.getInstance().setGameVolume();
             // Usamos la variable global y le añadimos el Listener de salida de balas
             gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
+            gameWindow.setOnExitToHome(() -> {
+              showHome();
+            });
+
+            gameWindow.setOnProjectileExitListener((type, y, angle, power) -> {
+              String msg = NetworkProtocol.formatProjectile(type, y, angle, power);
+              udpManager.send(msg, lastTargetIp, lastTargetPort);
+            });
+
+            primaryStage.setScene(gameWindow.createScene());
+            primaryStage.centerOnScreen();
+          });
+        } else if (newState instanceof com.slingshot.core.states.PlayingState) {
+          Platform.runLater(() -> {
+            gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
+
+            // ¡NUEVO! Conectamos el botón Abandonar de GameWindow hacia AppFX
+            gameWindow.setOnExitToHome(() -> {
+              showHome();
+            });
 
             gameWindow.setOnProjectileExitListener((type, y, angle, power) -> {
               String msg = NetworkProtocol.formatProjectile(type, y, angle, power);
@@ -210,11 +251,37 @@ public class AppFX extends Application {
   // --- MÉTODOS DE NAVEGACIÓN ---
 
   public void showHome() {
+    com.slingshot.core.SoundManager.getInstance().setMenuVolume();
+
+    this.handshakeComplete = false;
+
+    // 1. Liberamos el puerto
+    if (udpManager != null) {
+      udpManager.stopListening();
+    }
+
+    // 2. Matamos el bucle de la partida (si existía)
+    if (gameWindow != null) {
+      gameWindow.stopGame();
+      gameWindow = null;
+    }
+
+    // // 3. Detenemos cualquier hilo del lobby anterior
+    // if (currentLobbyWindow != null) {
+    // currentLobbyWindow.stopLobby();
+    // }
+
+    // ¡NUEVO PASO 4! Reiniciamos el estado del motor para que acepte el Handshake
+    if (gameEngine != null) {
+      // Asumiendo que usas HandshakeState como estado inicial de conexión
+      gameEngine.setState(new com.slingshot.core.states.HandshakeState());
+    }
+
+    // 5. Mostramos la interfaz de inicio
     HomeWindow home = new HomeWindow(
-        this::showLobby, // Va al Lobby
-        this::showRules, // Va a Reglas
-        this::showControls // Va a Controles
-    );
+        this::showLobby,
+        this::showRules,
+        this::showControls);
     primaryStage.setScene(home.getScene());
     primaryStage.setTitle("Slingshot Battle - Inicio");
     primaryStage.centerOnScreen();
