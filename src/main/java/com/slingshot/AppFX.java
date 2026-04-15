@@ -246,17 +246,28 @@ public class AppFX extends Application {
   // --- MÉTODOS DE NAVEGACIÓN ---
 
   public void showHome() {
-    this.handshakeComplete = false;
-
-    // ¡TU SOLUCIÓN AQUÍ! Apagamos el motor de red y liberamos el puerto
+    this.handshakeComplete = false; 
+    
+    // 1. Liberamos el puerto de red
     if (udpManager != null) {
-      udpManager.stopListening();
+        udpManager.stopListening();
     }
 
+    // 2. ¡MATAMOS EL BUCLE FANTASMA!
+    if (gameWindow != null) {
+        gameWindow.stopGame();
+        gameWindow = null; // Eliminamos la referencia para que Java libere la RAM
+    }
+
+    // // 3. (Opcional pero recomendado) Detenemos el hilo del Lobby si quedó corriendo
+    // if (currentLobbyWindow != null) { // Cambia el nombre de la variable según la tengas en AppFX
+    //     currentLobbyWindow.stopLobby();
+    // }
+    
     HomeWindow home = new HomeWindow(
-        this::showLobby, // Va al Lobby
-        this::showRules, // Va a Reglas
-        this::showControls // Va a Controles
+        this::showLobby,
+        this::showRules,
+        this::showControls
     );
     primaryStage.setScene(home.getScene());
     primaryStage.setTitle("Slingshot Battle - Inicio");

@@ -222,22 +222,11 @@ public class GameWindow {
     });
 
     Button btnQuit = UIFactory.createMenuButton("ABANDONAR", "#e74c3c", () -> {
-      isGameOver = true;
-      isPaused = true;
-      // 1. Avisar al rival por la red
       engine.sendNetworkMessage("PLAYER_QUIT_GAME");
-
-      // 2. Detener el bucle de renderizado (crucial para liberar memoria)
-      if (gameLoop != null)
-        gameLoop.stop();
-
-      // 3. Mostrar mensaje y redirigir
       CustomAlert.show("Partida Abandonada", "Te has retirado de la zona cero.", () -> {
-        // Usamos Platform.runLater para asegurar que el cambio de escena
-        // ocurra después de que se cierre el mensaje de alerta
         Platform.runLater(() -> {
           if (onExitToHome != null)
-            onExitToHome.run();
+            onExitToHome.run(); // Esto llamará a showHome() en AppFX
         });
       });
     });
@@ -716,5 +705,15 @@ public class GameWindow {
       finContainer.getChildren().addAll(lblResultado, lblScore, new Label(""), btnReplay, btnExit);
       rootLayout.getChildren().add(finContainer);
     });
+  }
+
+  // --- MÉTODO DE LIMPIEZA TOTAL ---
+  public void stopGame() {
+    this.isGameOver = true;
+    this.isPaused = true;
+    if (this.gameLoop != null) {
+      this.gameLoop.stop();
+    }
+    System.out.println("[GameWindow] Bucle de juego detenido y memoria liberada.");
   }
 }
