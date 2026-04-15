@@ -29,9 +29,9 @@ public class AppFX extends Application {
 
   // Declaramos gameWindow a nivel global para que la red la pueda ver
   private GameWindow gameWindow;
-  
+
   // ¡NUEVO! Guardamos la ventana principal para poder navegar entre escenas
-  private Stage primaryStage; 
+  private Stage primaryStage;
 
   private String lastTargetIp = "127.0.0.1";
   private int lastTargetPort = 5001;
@@ -41,7 +41,7 @@ public class AppFX extends Application {
   @Override
   public void start(Stage primaryStage) {
     this.primaryStage = primaryStage; // Guardamos la referencia
-    
+
     try {
       udpManager = new UDPManager();
       gameEngine = new GameEngine();
@@ -80,7 +80,7 @@ public class AppFX extends Application {
               gameWindow.spawnRemoteProjectile(type, entryY, angle, power);
             }
           }
-          
+
           // RECIBIR RECOMPENSAS DE CAJAS ENEMIGAS
           if (message.startsWith("REWARD")) {
             String[] tokens = message.split(";");
@@ -93,7 +93,7 @@ public class AppFX extends Application {
               }
             });
           }
-          
+
           if (message.startsWith("FIN_PARTIDA")) {
             String[] tokens = message.split(";");
             int scoreRival = Integer.parseInt(tokens[1]);
@@ -104,7 +104,7 @@ public class AppFX extends Application {
               }
             });
           }
-          
+
           // RECIBIR POSICIÓN DEL RIVAL
           if (message.startsWith("POS")) {
             String[] tokens = message.split(";");
@@ -117,6 +117,14 @@ public class AppFX extends Application {
               }
             });
           }
+          if (message.equals("PLAYER_LEFT_SETUP")) {
+            if (currentSetupWindow != null) {
+              currentSetupWindow.showOpponentLeftAlert(() -> {
+                // Al darle click a OK en la alerta, volvemos al inicio
+                showHome();
+              });
+            }
+          }
         });
       });
 
@@ -128,6 +136,10 @@ public class AppFX extends Application {
 
           Platform.runLater(() -> {
             currentSetupWindow = new SetupWindow(udpManager, lastTargetIp, lastTargetPort, isHost);
+            // Configuramos la acción del botón volver físico
+            currentSetupWindow.setOnBackListener(() -> {
+              showHome();
+            });
 
             // Atrapamos los datos elegidos
             currentSetupWindow.setOnSetupCompleteListener((mapId, charId) -> {
@@ -174,9 +186,9 @@ public class AppFX extends Application {
 
   public void showHome() {
     HomeWindow home = new HomeWindow(
-        this::showLobby,      // Va al Lobby
-        this::showRules,      // Va a Reglas
-        this::showControls    // Va a Controles
+        this::showLobby, // Va al Lobby
+        this::showRules, // Va a Reglas
+        this::showControls // Va a Controles
     );
     primaryStage.setScene(home.getScene());
     primaryStage.setTitle("Slingshot Battle - Inicio");
