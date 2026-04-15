@@ -41,7 +41,10 @@ public class LobbyWindow {
     }
 
     public void display(Stage stage, Runnable onBack) {
-        stage.setTitle("Sling-Shot Battle v2.0 - Conexión P2P");
+
+        this.isLobbyActive = true;
+
+        stage.setTitle("Sling-Shot Battle");
         StackPane layoutPrincipal = new StackPane();
 
         // 1. Fondo

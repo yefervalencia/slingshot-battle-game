@@ -248,22 +248,29 @@ public class AppFX extends Application {
   public void showHome() {
     this.handshakeComplete = false; 
     
-    // 1. Liberamos el puerto de red
+    // 1. Liberamos el puerto
     if (udpManager != null) {
         udpManager.stopListening();
     }
 
-    // 2. ¡MATAMOS EL BUCLE FANTASMA!
+    // 2. Matamos el bucle de la partida (si existía)
     if (gameWindow != null) {
         gameWindow.stopGame();
-        gameWindow = null; // Eliminamos la referencia para que Java libere la RAM
+        gameWindow = null;
     }
 
-    // // 3. (Opcional pero recomendado) Detenemos el hilo del Lobby si quedó corriendo
-    // if (currentLobbyWindow != null) { // Cambia el nombre de la variable según la tengas en AppFX
+    // // 3. Detenemos cualquier hilo del lobby anterior
+    // if (currentLobbyWindow != null) {
     //     currentLobbyWindow.stopLobby();
     // }
+
+    // ¡NUEVO PASO 4! Reiniciamos el estado del motor para que acepte el Handshake
+    if (gameEngine != null) {
+        // Asumiendo que usas HandshakeState como estado inicial de conexión
+        gameEngine.setState(new com.slingshot.core.states.HandshakeState());
+    }
     
+    // 5. Mostramos la interfaz de inicio
     HomeWindow home = new HomeWindow(
         this::showLobby,
         this::showRules,
