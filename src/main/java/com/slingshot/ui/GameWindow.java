@@ -222,6 +222,8 @@ public class GameWindow {
     });
 
     Button btnQuit = UIFactory.createMenuButton("ABANDONAR", "#e74c3c", () -> {
+      isGameOver = true;
+      isPaused = true;
       // 1. Avisar al rival por la red
       engine.sendNetworkMessage("PLAYER_QUIT_GAME");
 
