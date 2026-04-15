@@ -40,7 +40,7 @@ public class GameWindow {
   private Image healthIcon, ammoIcon, doubleIcon;
 
   // ¡CORRECCIÓN! Usamos esta variable global para la ventana completa
-  private StackPane rootLayout; 
+  private StackPane rootLayout;
   private VBox pauseMenuContainer;
 
   private double oppX = 0, oppY = 0; // Posición cruda del rival
@@ -48,7 +48,7 @@ public class GameWindow {
 
   private boolean isGameOver = false;
   private boolean endMenuShown = false; // Evita que el menú final se dibuje 60 veces por segundo
-  private String finalStatus = ""; 
+  private String finalStatus = "";
   private int opponentScore = -1; // -1 significa que aún no recibimos el dato
 
   private long lastAmmoRegen = System.currentTimeMillis();
@@ -119,31 +119,46 @@ public class GameWindow {
     Image skin = null;
     try {
       skin = new Image(getClass().getResourceAsStream("/assets/" + charId + "_skin.png"));
-    } catch (Exception e) {}
+    } catch (Exception e) {
+    }
     this.localPlayer = new Player(startX, startY, skin);
     generateCrates();
   }
 
   private void loadAssets() {
-    try { bgImage = new Image(getClass().getResourceAsStream("/assets/" + mapId + "_bg.png")); } catch (Exception e) {}
-    try { healthIcon = new Image(getClass().getResourceAsStream("/assets/icon_health.png")); } catch (Exception e) {}
-    try { ammoIcon = new Image(getClass().getResourceAsStream("/assets/icon_ammo.png")); } catch (Exception e) {}
-    try { doubleIcon = new Image(getClass().getResourceAsStream("/assets/icon_double.png")); } catch (Exception e) {}
+    try {
+      bgImage = new Image(getClass().getResourceAsStream("/assets/" + mapId + "_bg.png"));
+    } catch (Exception e) {
+    }
+    try {
+      healthIcon = new Image(getClass().getResourceAsStream("/assets/icon_health.png"));
+    } catch (Exception e) {
+    }
+    try {
+      ammoIcon = new Image(getClass().getResourceAsStream("/assets/icon_ammo.png"));
+    } catch (Exception e) {
+    }
+    try {
+      doubleIcon = new Image(getClass().getResourceAsStream("/assets/icon_double.png"));
+    } catch (Exception e) {
+    }
   }
 
   public Scene createScene() {
     // ¡CORRECCIÓN! Instanciamos la variable global
-    rootLayout = new StackPane(); 
+    rootLayout = new StackPane();
     canvas = new Canvas(WIDTH, HEIGHT);
 
     // Botón Pausa
     Button btnPause = new Button("II");
-    btnPause.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 20px; -fx-background-radius: 50em; -fx-min-width: 50px; -fx-min-height: 50px; -fx-cursor: hand; -fx-padding: 0;");
+    btnPause.setStyle(
+        "-fx-background-color: #f39c12; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 20px; -fx-background-radius: 50em; -fx-min-width: 50px; -fx-min-height: 50px; -fx-cursor: hand; -fx-padding: 0;");
     btnPause.setOnMouseEntered(e -> btnPause.setStyle(btnPause.getStyle().replace("#f39c12", "#e67e22")));
     btnPause.setOnMouseExited(e -> btnPause.setStyle(btnPause.getStyle().replace("#e67e22", "#f39c12")));
     btnPause.setOnAction(e -> showPauseMenu());
 
-    // ¡CORRECCIÓN! Esquina opuesta: Si es Host (Izq), botón a la Derecha. Si es Cliente (Der), botón a la Izq.
+    // ¡CORRECCIÓN! Esquina opuesta: Si es Host (Izq), botón a la Derecha. Si es
+    // Cliente (Der), botón a la Izq.
     StackPane.setAlignment(btnPause, isHost ? Pos.TOP_RIGHT : Pos.TOP_LEFT);
     StackPane.setMargin(btnPause, new Insets(20));
 
@@ -165,13 +180,15 @@ public class GameWindow {
   }
 
   private void showPauseMenu() {
-    if (isPaused || isGameOver) return; 
+    if (isPaused || isGameOver)
+      return;
     isPaused = true;
 
     pauseMenuContainer = new VBox(20);
     pauseMenuContainer.setAlignment(Pos.CENTER);
     pauseMenuContainer.setMaxSize(400, 500);
-    pauseMenuContainer.setStyle("-fx-background-color: rgba(0, 0, 0, 0.85); -fx-background-radius: 20; -fx-border-color: #f39c12; -fx-border-width: 3; -fx-border-radius: 20;");
+    pauseMenuContainer.setStyle(
+        "-fx-background-color: rgba(0, 0, 0, 0.85); -fx-background-radius: 20; -fx-border-color: #f39c12; -fx-border-width: 3; -fx-border-radius: 20;");
     pauseMenuContainer.setPadding(new Insets(30));
 
     Label lblTitle = new Label("JUEGO EN PAUSA");
@@ -182,98 +199,127 @@ public class GameWindow {
 
     Button btnResume = UIFactory.createMenuButton("CONTINUAR", "#2ecc71", () -> {
       isPaused = false;
-      rootLayout.getChildren().remove(pauseMenuContainer); 
+      rootLayout.getChildren().remove(pauseMenuContainer);
     });
 
     Button btnControls = UIFactory.createMenuButton("CONTROLES", "#3498db", () -> {
-      CustomAlert.show("Controles de Combate", "Z: Arma Sniper\nX: Arma Artillería\nC: Colocar Barrera\nMouse: Apuntar y Disparar", null);
+      CustomAlert.show("Controles de Combate",
+          "Z: Arma Sniper\nX: Arma Artillería\nC: Colocar Barrera\nMouse: Apuntar y Disparar", null);
     });
 
     Button btnPoints = UIFactory.createMenuButton("PUNTUACIÓN", "#9b59b6", () -> {
-      CustomAlert.show("Estado de la Partida", "Tus Puntos: " + localPlayer.getScore() + "\nPuntos del Rival: " + opponentScoreDisplay, null);
+      CustomAlert.show("Estado de la Partida",
+          "Tus Puntos: " + localPlayer.getScore() + "\nPuntos del Rival: " + opponentScoreDisplay, null);
     });
 
     Button btnQuit = UIFactory.createMenuButton("ABANDONAR", "#e74c3c", () -> {
       engine.sendNetworkMessage("PLAYER_QUIT_GAME");
       CustomAlert.show("Partida Abandonada", "Te has retirado de la zona cero.", () -> {
-        System.exit(0);
+        // ¡SOLUCIÓN AL CRASHEO DE GLASS.DLL!
+        // Le damos tiempo a JavaFX a cerrar la alerta antes de matar el juego
+        Platform.runLater(() -> {
+          Platform.exit(); // Cierra JavaFX limpiamente
+          System.exit(0); // Apaga los hilos de red
+        });
       });
     });
 
-    pauseMenuContainer.getChildren().addAll(lblTitle, lblWarning, new Label(""), btnResume, btnControls, btnPoints, btnQuit);
-    
-    // Ahora rootLayout sí existe y esto funcionará perfecto
+    pauseMenuContainer.getChildren().addAll(lblTitle, lblWarning, new Label(""), btnResume, btnControls, btnPoints,
+        btnQuit);
     rootLayout.getChildren().add(pauseMenuContainer);
   }
 
   private void update() {
     if (isGameOver) {
-      if (!endMenuShown) showEndGameMenu();
+      if (!endMenuShown)
+        showEndGameMenu();
       return;
     }
-    
-    if (isPaused) return;
 
+    // ¡ELIMINADO: if (isPaused) return;!
+    // Ahora el tiempo y los enemigos siguen actualizándose de fondo.
+
+    // 1. EL TIEMPO NUNCA SE DETIENE
     if (System.currentTimeMillis() - lastTimerUpdate > 1000) {
       gameTimeSeconds--;
       lastTimerUpdate = System.currentTimeMillis();
-      if (gameTimeSeconds <= 0) finalizarPartida();
+      if (gameTimeSeconds <= 0)
+        finalizarPartida();
     }
 
-    // --- REGENERACIÓN AUTOMÁTICA DE MUNICIÓN ---
+    // 2. REGENERACIÓN DE MUNICIÓN NUNCA SE DETIENE
     if (localPlayer.getAmmo() < 1 && System.currentTimeMillis() - lastAmmoRegen > AMMO_COOLDOWN) {
       localPlayer.addAmmo(1);
       lastAmmoRegen = System.currentTimeMillis();
     }
 
-    // Selector de Armas
-    if (inputManager.isKeyPressed("Z")) { currentWeapon = "sniper"; isBuildingMode = false; }
-    if (inputManager.isKeyPressed("X")) { currentWeapon = "artillery"; isBuildingMode = false; }
-    if (inputManager.isKeyPressed("C")) { isBuildingMode = true; }
-
-    double minX = isHost ? 0 : WIDTH * 0.70;
-    double maxX = isHost ? WIDTH * 0.30 : WIDTH;
-    localPlayer.update(inputManager, minX, maxX, HEIGHT);
-
-    if (!isBuildingMode) {
-      if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
-        isCharging = true;
-        if (currentWeapon.equals("artillery")) {
-          chargePower += 0.4;
-          if (chargePower > MAX_POWER) chargePower = MAX_POWER;
-        }
-      } else if (isCharging) {
-        shoot();
-        isCharging = false;
-        chargePower = 5.0;
+    // ==========================================
+    // 3. ESTO SÍ SE PAUSA (CONTROLES DEL JUGADOR LOCAL)
+    // ==========================================
+    if (!isPaused) {
+      // Selector de Armas
+      if (inputManager.isKeyPressed("Z")) {
+        currentWeapon = "sniper";
+        isBuildingMode = false;
       }
-    } else {
-      if (inputManager.isMousePressed()) {
-        if (canPlaceBarrier && activeBarriers.size() < MAX_BARRIERS) {
-          double mx = inputManager.getMouseX();
-          double my = inputManager.getMouseY();
-          double limit30 = WIDTH * 0.30;
-          double limit70 = WIDTH * 0.70;
-          boolean inValidZone = isHost ? (mx > limit30) : (mx < limit70);
+      if (inputManager.isKeyPressed("X")) {
+        currentWeapon = "artillery";
+        isBuildingMode = false;
+      }
+      if (inputManager.isKeyPressed("C")) {
+        isBuildingMode = true;
+      }
 
-          if (inValidZone) {
-            activeBarriers.add(new com.slingshot.entities.Barrier(mx - 22, my - 22));
-            canPlaceBarrier = false;
+      double minX = isHost ? 0 : WIDTH * 0.70;
+      double maxX = isHost ? WIDTH * 0.30 : WIDTH;
+      localPlayer.update(inputManager, minX, maxX, HEIGHT);
+
+      if (!isBuildingMode) {
+        if (inputManager.isMousePressed() && localPlayer.getAmmo() > 0) {
+          isCharging = true;
+          if (currentWeapon.equals("artillery")) {
+            chargePower += 0.4;
+            if (chargePower > MAX_POWER)
+              chargePower = MAX_POWER;
           }
+        } else if (isCharging) {
+          shoot();
+          isCharging = false;
+          chargePower = 5.0;
         }
       } else {
-        canPlaceBarrier = true; 
+        if (inputManager.isMousePressed()) {
+          if (canPlaceBarrier && activeBarriers.size() < MAX_BARRIERS) {
+            double mx = inputManager.getMouseX();
+            double my = inputManager.getMouseY();
+            double limit30 = WIDTH * 0.30;
+            double limit70 = WIDTH * 0.70;
+            boolean inValidZone = isHost ? (mx > limit30) : (mx < limit70);
+
+            if (inValidZone) {
+              activeBarriers.add(new com.slingshot.entities.Barrier(mx - 22, my - 22));
+              canPlaceBarrier = false;
+            }
+          }
+        } else {
+          canPlaceBarrier = true;
+        }
       }
-    }
+    } // FIN DEL BLOQUE DE PAUSA
+
+    // ==========================================
+    // 4. ESTO NO SE PAUSA (MUNDO Y ENEMIGOS)
+    // ==========================================
 
     Iterator<FloatingIndicator> fIt = floatingIndicators.iterator();
     while (fIt.hasNext()) {
       FloatingIndicator fi = fIt.next();
       fi.update();
-      if (!fi.isAlive()) fIt.remove();
+      if (!fi.isAlive())
+        fIt.remove();
     }
 
-    // Actualizar Balas y Colisiones
+    // Actualizar Balas y Colisiones EN TIEMPO REAL
     Iterator<Projectile> it = activeProjectiles.iterator();
     while (it.hasNext()) {
       Projectile p = it.next();
@@ -289,13 +335,14 @@ public class GameWindow {
               p.getY() > b.getY() && p.getY() < b.getY() + b.getHeight()) {
             b.takeDamage(p.getType());
             projectileDestroyed = true;
-            if (!b.isAlive()) bIt.remove();
+            if (!b.isAlive())
+              bIt.remove();
             break;
           }
         }
       }
 
-      // Colisión con Jugador
+      // Colisión con Jugador Local
       if (p.isEnemy() && localPlayer.checkHit(p.getX(), p.getY())) {
         localPlayer.takeDamage();
         projectileDestroyed = true;
@@ -308,7 +355,8 @@ public class GameWindow {
           if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
               p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
             boolean destruyeBala = c.onHitByBullet(null, p);
-            if (destruyeBala) projectileDestroyed = true;
+            if (destruyeBala)
+              projectileDestroyed = true;
             enviarRecompensaRed(c);
             break;
           }
@@ -316,8 +364,10 @@ public class GameWindow {
       }
 
       boolean exited = false;
-      if (isHost && p.getX() > WIDTH) exited = true;
-      if (!isHost && p.getX() < 0) exited = true;
+      if (isHost && p.getX() > WIDTH)
+        exited = true;
+      if (!isHost && p.getX() < 0)
+        exited = true;
 
       if (exited) {
         if (exitListener != null) {
@@ -338,6 +388,8 @@ public class GameWindow {
       finalizarPartida();
     }
 
+    // Seguimos enviando nuestra posición aunque estemos pausados
+    // para que el rival no nos vea desaparecer de su radar
     if (System.currentTimeMillis() - lastPosSend > 50) {
       engine.sendNetworkMessage(NetworkProtocol.formatPosition(localPlayer.getCenterX(), localPlayer.getCenterY()));
       lastPosSend = System.currentTimeMillis();
@@ -376,17 +428,20 @@ public class GameWindow {
     double limit30 = WIDTH * 0.30;
     double limit70 = WIDTH * 0.70;
     gc.setFill(Color.rgb(255, 0, 0, 0.15));
-    if (isHost) gc.fillRect(limit30, 0, WIDTH - limit30, HEIGHT);
-    else gc.fillRect(0, 0, limit70, HEIGHT);
+    if (isHost)
+      gc.fillRect(limit30, 0, WIDTH - limit30, HEIGHT);
+    else
+      gc.fillRect(0, 0, limit70, HEIGHT);
 
     localPlayer.render(gc);
-    for (Projectile p : activeProjectiles) p.render(gc);
+    for (Projectile p : activeProjectiles)
+      p.render(gc);
 
     gc.setFill(Color.WHITE);
     gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 20));
 
     gc.fillText("Vidas: " + localPlayer.getLives(), hudX, 30);
-    gc.fillText("Munición: " + localPlayer.getAmmo(), hudX, 60); 
+    gc.fillText("Munición: " + localPlayer.getAmmo(), hudX, 60);
     gc.fillText("Puntos: " + localPlayer.getScore(), hudX, 90);
 
     String modoActivo = isBuildingMode ? "CONSTRUCCIÓN (C)" : "ARMA: " + currentWeapon.toUpperCase();
@@ -395,27 +450,31 @@ public class GameWindow {
 
     if (localPlayer.isDoubleScoreActive()) {
       gc.setFill(Color.PURPLE);
-      gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 22)); 
+      gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 22));
       gc.fillText("¡DOBLE PUNTUACIÓN! (" + localPlayer.getDoubleScoreTimeLeft() + "s)", hudX, 165);
     }
 
     gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.NORMAL, 12));
     gc.setStroke(Color.rgb(255, 0, 0, 0.4));
     gc.setLineWidth(2);
-    gc.strokeLine(localPlayer.getCenterX(), localPlayer.getCenterY(), inputManager.getMouseX(), inputManager.getMouseY());
+    gc.strokeLine(localPlayer.getCenterX(), localPlayer.getCenterY(), inputManager.getMouseX(),
+        inputManager.getMouseY());
 
     if (isCharging && currentWeapon.equals("artillery")) {
       double barWidth = 50;
       double chargePercent = chargePower / MAX_POWER;
-      gc.setFill(Color.rgb(0, 0, 0, 0.5)); 
+      gc.setFill(Color.rgb(0, 0, 0, 0.5));
       gc.fillRect(localPlayer.getCenterX() - barWidth / 2, localPlayer.getCenterY() - 45, barWidth, 6);
-      gc.setFill(Color.rgb(231, 76, 60)); 
+      gc.setFill(Color.rgb(231, 76, 60));
       gc.fillRect(localPlayer.getCenterX() - barWidth / 2, localPlayer.getCenterY() - 45, barWidth * chargePercent, 6);
     }
 
-    for (Crate c : crates) c.render(gc);
-    for (FloatingIndicator fi : floatingIndicators) fi.render(gc);
-    for (Barrier b : activeBarriers) b.render(gc);
+    for (Crate c : crates)
+      c.render(gc);
+    for (FloatingIndicator fi : floatingIndicators)
+      fi.render(gc);
+    for (Barrier b : activeBarriers)
+      b.render(gc);
 
     if (isBuildingMode) {
       gc.setGlobalAlpha(0.3);
@@ -425,11 +484,11 @@ public class GameWindow {
     }
 
     // --- RADAR DEL OPONENTE ---
-    double radarX = isHost ? WIDTH - 40 : 10; 
-    gc.setFill(Color.rgb(255, 0, 0, 0.3)); 
+    double radarX = isHost ? WIDTH - 40 : 10;
+    gc.setFill(Color.rgb(255, 0, 0, 0.3));
     gc.fillRect(radarX + 10, 0, 10, HEIGHT);
-    gc.setFill(Color.LIME); 
-    gc.setEffect(new javafx.scene.effect.Bloom()); 
+    gc.setFill(Color.LIME);
+    gc.setEffect(new javafx.scene.effect.Bloom());
     gc.fillOval(radarX + 5, oppY - 10, 20, 20);
     gc.setEffect(null);
 
@@ -466,23 +525,30 @@ public class GameWindow {
       boolean superpuesta = false;
       for (Crate existente : crates) {
         if (Math.abs(existente.getX() - cx) < 45 && Math.abs(existente.getY() - cy) < 45) {
-          superpuesta = true; break;
+          superpuesta = true;
+          break;
         }
       }
       if (!superpuesta) {
         double prob = rand.nextDouble();
-        if (prob < 0.20) crates.add(new IndestructibleCrate(cx, cy));
-        else if (prob < 0.30) crates.add(new HealthCrate(cx, cy));
-        else if (prob < 0.40) crates.add(new AmmoCrate(cx, cy));
-        else if (prob < 0.50) crates.add(new DoubleScoreCrate(cx, cy));
-        else crates.add(new EmptyCrate(cx, cy));
+        if (prob < 0.20)
+          crates.add(new IndestructibleCrate(cx, cy));
+        else if (prob < 0.30)
+          crates.add(new HealthCrate(cx, cy));
+        else if (prob < 0.40)
+          crates.add(new AmmoCrate(cx, cy));
+        else if (prob < 0.50)
+          crates.add(new DoubleScoreCrate(cx, cy));
+        else
+          crates.add(new EmptyCrate(cx, cy));
         creadas++;
       }
     }
   }
 
   public void applyNetworkReward(String type, int amount) {
-    if (localPlayer == null) return;
+    if (localPlayer == null)
+      return;
     double floatX = localPlayer.getCenterX() - 15;
     double floatY = localPlayer.getCenterY() - 40;
 
@@ -504,12 +570,17 @@ public class GameWindow {
 
   private void enviarRecompensaRed(Crate c) {
     String msg = "";
-    if (c instanceof AmmoCrate) msg = "REWARD;AMMO;5";
-    else if (c instanceof HealthCrate) msg = "REWARD;LIFE;1";
-    else if (c instanceof DoubleScoreCrate) msg = "REWARD;DOUBLE;8";
-    else if (c instanceof EmptyCrate) msg = "REWARD;SCORE;10";
+    if (c instanceof AmmoCrate)
+      msg = "REWARD;AMMO;5";
+    else if (c instanceof HealthCrate)
+      msg = "REWARD;LIFE;1";
+    else if (c instanceof DoubleScoreCrate)
+      msg = "REWARD;DOUBLE;8";
+    else if (c instanceof EmptyCrate)
+      msg = "REWARD;SCORE;10";
 
-    if (!msg.isEmpty()) engine.sendNetworkMessage(msg);
+    if (!msg.isEmpty())
+      engine.sendNetworkMessage(msg);
   }
 
   private void regenerarMapa() {
@@ -521,30 +592,37 @@ public class GameWindow {
       if (c instanceof IndestructibleCrate) {
         double newX = minX + rand.nextDouble() * (maxX - minX - 45);
         double newY = rand.nextDouble() * (HEIGHT - 45);
-        c.setX(newX); c.setY(newY);
+        c.setX(newX);
+        c.setY(newY);
       }
     }
 
     if (crates.size() < MAX_CRATES) {
-      int cuantasNuevas = 3; 
+      int cuantasNuevas = 3;
       for (int i = 0; i < cuantasNuevas; i++) {
-        if (crates.size() >= MAX_CRATES) break;
+        if (crates.size() >= MAX_CRATES)
+          break;
         double cx = minX + rand.nextDouble() * (maxX - minX - 45);
         double cy = rand.nextDouble() * (HEIGHT - 45);
 
         boolean superpuesta = false;
         for (Crate existente : crates) {
           if (Math.abs(existente.getX() - cx) < 45 && Math.abs(existente.getY() - cy) < 45) {
-            superpuesta = true; break;
+            superpuesta = true;
+            break;
           }
         }
 
         if (!superpuesta) {
           double prob = rand.nextDouble();
-          if (prob < 0.15) crates.add(new HealthCrate(cx, cy));
-          else if (prob < 0.30) crates.add(new AmmoCrate(cx, cy));
-          else if (prob < 0.45) crates.add(new DoubleScoreCrate(cx, cy));
-          else crates.add(new EmptyCrate(cx, cy));
+          if (prob < 0.15)
+            crates.add(new HealthCrate(cx, cy));
+          else if (prob < 0.30)
+            crates.add(new AmmoCrate(cx, cy));
+          else if (prob < 0.45)
+            crates.add(new DoubleScoreCrate(cx, cy));
+          else
+            crates.add(new EmptyCrate(cx, cy));
         }
       }
     }
@@ -583,30 +661,33 @@ public class GameWindow {
       VBox finContainer = new VBox(25);
       finContainer.setAlignment(Pos.CENTER);
       finContainer.setMaxSize(600, 500);
-      
+
       Color colorBorde = finalStatus.equals("¡VICTORIA!") ? Color.web("#2ecc71") : Color.web("#e74c3c");
       String hexColor = finalStatus.equals("¡VICTORIA!") ? "#2ecc71" : "#e74c3c";
-      
-      finContainer.setStyle("-fx-background-color: rgba(0, 0, 0, 0.9); -fx-border-color: " + hexColor + "; -fx-border-width: 4; -fx-background-radius: 15; -fx-border-radius: 15;");
-      
+
+      finContainer.setStyle("-fx-background-color: rgba(0, 0, 0, 0.9); -fx-border-color: " + hexColor
+          + "; -fx-border-width: 4; -fx-background-radius: 15; -fx-border-radius: 15;");
+
       Label lblResultado = new Label(finalStatus);
       lblResultado.setFont(Font.font("Arial", FontWeight.BOLD, 50));
       lblResultado.setTextFill(colorBorde);
 
-      Label lblScore = new Label("TUS PUNTOS: " + localPlayer.getScore() + "  |  RIVAL: " + (opponentScore == -1 ? "..." : opponentScore));
+      Label lblScore = new Label(
+          "TUS PUNTOS: " + localPlayer.getScore() + "  |  RIVAL: " + (opponentScore == -1 ? "..." : opponentScore));
       lblScore.setFont(Font.font("Monospaced", FontWeight.BOLD, 22));
       lblScore.setTextFill(Color.WHITE);
 
-      Button btnReplay = UIFactory.createMenuButton("VOLVER A JUGAR", "#3498db", () -> {});
+      Button btnReplay = UIFactory.createMenuButton("VOLVER A JUGAR", "#3498db", () -> {
+      });
       btnReplay.setOnAction(e -> {
-          engine.sendNetworkMessage("REPLAY_REQUEST");
-          btnReplay.setText("ESPERANDO RIVAL...");
-          btnReplay.setDisable(true);
+        engine.sendNetworkMessage("REPLAY_REQUEST");
+        btnReplay.setText("ESPERANDO RIVAL...");
+        btnReplay.setDisable(true);
       });
 
       Button btnExit = UIFactory.createMenuButton("SALIR", "#e74c3c", () -> {
-          engine.sendNetworkMessage("REPLAY_RESPONSE;NO");
-          System.exit(0);
+        engine.sendNetworkMessage("REPLAY_RESPONSE;NO");
+        System.exit(0);
       });
 
       finContainer.getChildren().addAll(lblResultado, lblScore, new Label(""), btnReplay, btnExit);
