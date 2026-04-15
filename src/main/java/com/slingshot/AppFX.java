@@ -5,9 +5,13 @@ import com.slingshot.core.states.SetupState;
 import com.slingshot.network.NetworkObserver;
 import com.slingshot.network.NetworkProtocol;
 import com.slingshot.network.UDPManager;
+import com.slingshot.ui.ControlsWindow;
 import com.slingshot.ui.GameWindow;
+import com.slingshot.ui.HomeWindow;
 import com.slingshot.ui.LobbyWindow;
+import com.slingshot.ui.RulesWindow;
 import com.slingshot.ui.SetupWindow;
+
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
@@ -23,9 +27,11 @@ public class AppFX extends Application {
   private SetupWindow currentSetupWindow;
   private LobbyWindow lobbyWindow;
 
-  // ¡CORRECCIÓN 1! Declaramos gameWindow a nivel global para que la red la pueda
-  // ver
+  // Declaramos gameWindow a nivel global para que la red la pueda ver
   private GameWindow gameWindow;
+  
+  // ¡NUEVO! Guardamos la ventana principal para poder navegar entre escenas
+  private Stage primaryStage; 
 
   private String lastTargetIp = "127.0.0.1";
   private int lastTargetPort = 5001;
@@ -34,6 +40,8 @@ public class AppFX extends Application {
 
   @Override
   public void start(Stage primaryStage) {
+    this.primaryStage = primaryStage; // Guardamos la referencia
+    
     try {
       udpManager = new UDPManager();
       gameEngine = new GameEngine();
@@ -72,7 +80,7 @@ public class AppFX extends Application {
               gameWindow.spawnRemoteProjectile(type, entryY, angle, power);
             }
           }
-          // Dentro del observer de mensajes en AppFX.java
+          
           // RECIBIR RECOMPENSAS DE CAJAS ENEMIGAS
           if (message.startsWith("REWARD")) {
             String[] tokens = message.split(";");
@@ -80,12 +88,12 @@ public class AppFX extends Application {
             int amount = Integer.parseInt(tokens[2]);
 
             Platform.runLater(() -> {
-              // Le pasamos la recompensa a la ventana, ella sabrá qué hacer
               if (gameWindow != null) {
                 gameWindow.applyNetworkReward(type, amount);
               }
             });
           }
+          
           if (message.startsWith("FIN_PARTIDA")) {
             String[] tokens = message.split(";");
             int scoreRival = Integer.parseInt(tokens[1]);
@@ -96,6 +104,7 @@ public class AppFX extends Application {
               }
             });
           }
+          
           // RECIBIR POSICIÓN DEL RIVAL
           if (message.startsWith("POS")) {
             String[] tokens = message.split(";");
@@ -130,9 +139,7 @@ public class AppFX extends Application {
           });
         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
           Platform.runLater(() -> {
-
-            // ¡CORRECCIÓN 2! Usamos la variable global y le añadimos el Listener de salida
-            // de balas
+            // Usamos la variable global y le añadimos el Listener de salida de balas
             gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
 
             gameWindow.setOnProjectileExitListener((type, y, angle, power) -> {
@@ -146,6 +153,7 @@ public class AppFX extends Application {
         }
       });
 
+      // Inicializamos el Lobby en memoria
       lobbyWindow = new LobbyWindow(udpManager, gameEngine);
       lobbyWindow.setOnConnectAction((ip, port, rolSeleccionado) -> {
         this.lastTargetIp = ip;
@@ -153,11 +161,44 @@ public class AppFX extends Application {
         this.isHost = rolSeleccionado;
       });
 
-      lobbyWindow.display(primaryStage);
+      // ¡NUEVO! Arrancamos el juego mostrando la pantalla de Inicio
+      showHome();
 
     } catch (Exception e) {
       System.err.println("=== ERROR GRAVE AL INICIAR LA INTERFAZ ===");
       e.printStackTrace();
+    }
+  }
+
+  // --- MÉTODOS DE NAVEGACIÓN ---
+
+  public void showHome() {
+    HomeWindow home = new HomeWindow(
+        this::showLobby,      // Va al Lobby
+        this::showRules,      // Va a Reglas
+        this::showControls    // Va a Controles
+    );
+    primaryStage.setScene(home.getScene());
+    primaryStage.setTitle("Slingshot Battle - Inicio");
+    primaryStage.centerOnScreen();
+    primaryStage.show();
+  }
+
+  public void showRules() {
+    RulesWindow rules = new RulesWindow(this::showHome);
+    primaryStage.setScene(rules.getScene());
+    primaryStage.centerOnScreen();
+  }
+
+  public void showControls() {
+    ControlsWindow controls = new ControlsWindow(this::showHome);
+    primaryStage.setScene(controls.getScene());
+    primaryStage.centerOnScreen();
+  }
+
+  public void showLobby() {
+    if (lobbyWindow != null) {
+      lobbyWindow.display(primaryStage, this::showHome);
     }
   }
 
