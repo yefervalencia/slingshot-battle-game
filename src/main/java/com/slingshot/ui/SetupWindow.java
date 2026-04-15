@@ -4,6 +4,8 @@ import com.slingshot.entities.GameCharacter;
 import com.slingshot.entities.MapOption;
 import com.slingshot.network.NetworkProtocol;
 import com.slingshot.network.UDPManager;
+
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -16,6 +18,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SetupWindow {
+
+  public interface OnBackListener {
+    void onBack();
+  }
+
+  private OnBackListener backListener;
+
+  public void setOnBackListener(OnBackListener listener) {
+    this.backListener = listener;
+  }
 
   public interface OnSetupCompleteListener {
     void onSetupComplete(String mapId, String characterId);
@@ -105,7 +117,8 @@ public class SetupWindow {
         GameCharacter selectedChar = (GameCharacter) charGroup.getSelectedToggle().getUserData();
         MapOption selectedMap = (MapOption) mapGroup.getSelectedToggle().getUserData();
 
-        if (setupListener != null) setupListener.onSetupComplete(selectedMap.getId(), selectedChar.getId());
+        if (setupListener != null)
+          setupListener.onSetupComplete(selectedMap.getId(), selectedChar.getId());
 
         String msg = NetworkProtocol.formatSetupPC1(selectedMap.getId(), selectedChar.getId(), txtName.getText());
         udpManager.send(msg, targetIp, targetPort);
@@ -123,15 +136,32 @@ public class SetupWindow {
         GameCharacter selectedChar = (GameCharacter) charGroup.getSelectedToggle().getUserData();
         MapOption selectedMap = (MapOption) mapGroup.getSelectedToggle().getUserData();
 
-        if (setupListener != null) setupListener.onSetupComplete(selectedMap.getId(), selectedChar.getId());
+        if (setupListener != null)
+          setupListener.onSetupComplete(selectedMap.getId(), selectedChar.getId());
 
         udpManager.send("READY_PC2;" + selectedChar.getId() + ";" + txtName.getText(), targetIp, targetPort);
         lockUI("¡Listo! Esperando inicio...");
       });
     }
+    // BOTÓN VOLVER (Usando UIFactory)
+    Button btnBack = UIFactory.createBackButton(() -> {
+      // Notificamos al oponente que nos vamos
+      udpManager.send("PLAYER_LEFT_SETUP", targetIp, targetPort);
+      if (backListener != null)
+        backListener.onBack();
+    });
 
+    StackPane.setAlignment(btnBack, Pos.TOP_LEFT);
+    StackPane.setMargin(btnBack, new Insets(20));
     root.getChildren().add(layout);
+    root.getChildren().add(btnBack);
     return new Scene(root, 1000, 700);
+  }
+
+  public void showOpponentLeftAlert(Runnable onConfirm) {
+    Platform.runLater(() -> {
+      CustomAlert.show("Conexión Perdida", "El otro jugador ha abandonado la sala de espera.", onConfirm);
+    });
   }
 
   // --- MÉTODOS CREADORES DE UI ---
