@@ -246,6 +246,13 @@ public class AppFX extends Application {
   // --- MÉTODOS DE NAVEGACIÓN ---
 
   public void showHome() {
+    this.handshakeComplete = false;
+
+    // ¡TU SOLUCIÓN AQUÍ! Apagamos el motor de red y liberamos el puerto
+    if (udpManager != null) {
+      udpManager.stopListening();
+    }
+
     HomeWindow home = new HomeWindow(
         this::showLobby, // Va al Lobby
         this::showRules, // Va a Reglas
