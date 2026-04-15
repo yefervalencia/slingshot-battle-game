@@ -6,6 +6,7 @@ import com.slingshot.network.NetworkObserver;
 import com.slingshot.network.NetworkProtocol;
 import com.slingshot.network.UDPManager;
 import com.slingshot.ui.ControlsWindow;
+import com.slingshot.ui.CustomAlert;
 import com.slingshot.ui.GameWindow;
 import com.slingshot.ui.HomeWindow;
 import com.slingshot.ui.LobbyWindow;
@@ -124,6 +125,30 @@ public class AppFX extends Application {
                 showHome();
               });
             }
+          }
+          if (message.equals("REPLAY_REQUEST")) {
+            Platform.runLater(() -> {
+              CustomAlert.showConfirm("¿Revancha?", "El oponente quiere jugar de nuevo. ¿Aceptas?",
+                  () -> { // SI
+                    udpManager.send("REPLAY_RESPONSE;YES", lastTargetIp, lastTargetPort);
+                    gameEngine.setState(new SetupState()); // Volver al setup
+                  },
+                  () -> { // NO
+                    udpManager.send("REPLAY_RESPONSE;NO", lastTargetIp, lastTargetPort);
+                    showHome();
+                  });
+            });
+          }
+
+          if (message.startsWith("REPLAY_RESPONSE")) {
+            String resp = message.split(";")[1];
+            Platform.runLater(() -> {
+              if (resp.equals("YES")) {
+                gameEngine.setState(new SetupState());
+              } else {
+                CustomAlert.show("Petición Rechazada", "El rival ha decidido no jugar más.", () -> showHome());
+              }
+            });
           }
         });
       });
