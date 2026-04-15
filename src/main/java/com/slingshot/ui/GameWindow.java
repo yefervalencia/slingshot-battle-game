@@ -36,6 +36,13 @@ import java.util.List;
 
 public class GameWindow {
 
+  // --- Callback para volver al inicio ---
+  private Runnable onExitToHome;
+
+  public void setOnExitToHome(Runnable onExitToHome) {
+    this.onExitToHome = onExitToHome;
+  }
+
   private List<FloatingIndicator> floatingIndicators = new ArrayList<>();
   private Image healthIcon, ammoIcon, doubleIcon;
 
@@ -70,6 +77,8 @@ public class GameWindow {
   }
 
   private List<Crate> crates = new ArrayList<>();
+
+  private AnimationTimer gameLoop;
 
   private int gameTimeSeconds = 600; // 10 minutos
   private long lastTimerUpdate = System.currentTimeMillis();
@@ -167,14 +176,14 @@ public class GameWindow {
     Scene scene = new Scene(rootLayout, WIDTH, HEIGHT);
     inputManager.attachToScene(scene);
 
-    AnimationTimer timer = new AnimationTimer() {
+    gameLoop = new AnimationTimer() {
       @Override
       public void handle(long now) {
         update();
         render();
       }
     };
-    timer.start();
+    gameLoop.start();
 
     return scene;
   }
@@ -213,15 +222,16 @@ public class GameWindow {
     });
 
     Button btnQuit = UIFactory.createMenuButton("ABANDONAR", "#e74c3c", () -> {
-      engine.sendNetworkMessage("PLAYER_QUIT_GAME");
-      CustomAlert.show("Partida Abandonada", "Te has retirado de la zona cero.", () -> {
-        // ¡SOLUCIÓN AL CRASHEO DE GLASS.DLL!
-        // Le damos tiempo a JavaFX a cerrar la alerta antes de matar el juego
-        Platform.runLater(() -> {
-          Platform.exit(); // Cierra JavaFX limpiamente
-          System.exit(0); // Apaga los hilos de red
-        });
-      });
+      // 1. Avisar a la red
+      engine.sendNetworkMessage("PLAYER_QUIT_MATCH");
+
+      // 2. Detener el bucle del juego para que no consuma memoria en el menú
+      if (gameLoop != null)
+        gameLoop.stop();
+
+      // 3. Volver al Home usando el callback
+      if (onExitToHome != null)
+        onExitToHome.run();
     });
 
     pauseMenuContainer.getChildren().addAll(lblTitle, lblWarning, new Label(""), btnResume, btnControls, btnPoints,
@@ -687,7 +697,10 @@ public class GameWindow {
 
       Button btnExit = UIFactory.createMenuButton("SALIR", "#e74c3c", () -> {
         engine.sendNetworkMessage("REPLAY_RESPONSE;NO");
-        System.exit(0);
+        if (gameLoop != null)
+          gameLoop.stop();
+        if (onExitToHome != null)
+          onExitToHome.run();
       });
 
       finContainer.getChildren().addAll(lblResultado, lblScore, new Label(""), btnReplay, btnExit);

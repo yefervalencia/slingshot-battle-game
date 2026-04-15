@@ -150,6 +150,14 @@ public class AppFX extends Application {
               }
             });
           }
+          // SI EL RIVAL ABANDONA EN MEDIO DE LA PARTIDA
+          if (message.equals("PLAYER_QUIT_MATCH")) {
+            Platform.runLater(() -> {
+                CustomAlert.show("Conexión Perdida", "El rival ha abandonado la partida en curso.", () -> {
+                    showHome(); // Nos saca al inicio a nosotros también
+                });
+            });
+          }
         });
       });
 
@@ -178,6 +186,23 @@ public class AppFX extends Application {
           Platform.runLater(() -> {
             // Usamos la variable global y le añadimos el Listener de salida de balas
             gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
+
+            gameWindow.setOnProjectileExitListener((type, y, angle, power) -> {
+              String msg = NetworkProtocol.formatProjectile(type, y, angle, power);
+              udpManager.send(msg, lastTargetIp, lastTargetPort);
+            });
+
+            primaryStage.setScene(gameWindow.createScene());
+            primaryStage.centerOnScreen();
+          });
+        } else if (newState instanceof com.slingshot.core.states.PlayingState) {
+          Platform.runLater(() -> {
+            gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
+
+            // ¡NUEVO! Conectamos el botón Abandonar de GameWindow hacia AppFX
+            gameWindow.setOnExitToHome(() -> {
+                showHome();
+            });
 
             gameWindow.setOnProjectileExitListener((type, y, angle, power) -> {
               String msg = NetworkProtocol.formatProjectile(type, y, angle, power);
