@@ -43,6 +43,9 @@ public class AppFX extends Application {
   public void start(Stage primaryStage) {
     this.primaryStage = primaryStage; // Guardamos la referencia
 
+    // ¡INICIAR LA MÚSICA DE FONDO!
+    com.slingshot.core.SoundManager.getInstance().playBGM();
+
     try {
       udpManager = new UDPManager();
       gameEngine = new GameEngine();
@@ -192,6 +195,8 @@ public class AppFX extends Application {
           });
         } else if (newState instanceof com.slingshot.core.states.PlayingState) {
           Platform.runLater(() -> {
+
+            com.slingshot.core.SoundManager.getInstance().setGameVolume();
             // Usamos la variable global y le añadimos el Listener de salida de balas
             gameWindow = new GameWindow(gameEngine, isHost, matchMapId, myCharacterId);
             gameWindow.setOnExitToHome(() -> {
@@ -246,36 +251,37 @@ public class AppFX extends Application {
   // --- MÉTODOS DE NAVEGACIÓN ---
 
   public void showHome() {
-    this.handshakeComplete = false; 
-    
+    com.slingshot.core.SoundManager.getInstance().setMenuVolume();
+
+    this.handshakeComplete = false;
+
     // 1. Liberamos el puerto
     if (udpManager != null) {
-        udpManager.stopListening();
+      udpManager.stopListening();
     }
 
     // 2. Matamos el bucle de la partida (si existía)
     if (gameWindow != null) {
-        gameWindow.stopGame();
-        gameWindow = null;
+      gameWindow.stopGame();
+      gameWindow = null;
     }
 
     // // 3. Detenemos cualquier hilo del lobby anterior
     // if (currentLobbyWindow != null) {
-    //     currentLobbyWindow.stopLobby();
+    // currentLobbyWindow.stopLobby();
     // }
 
     // ¡NUEVO PASO 4! Reiniciamos el estado del motor para que acepte el Handshake
     if (gameEngine != null) {
-        // Asumiendo que usas HandshakeState como estado inicial de conexión
-        gameEngine.setState(new com.slingshot.core.states.HandshakeState());
+      // Asumiendo que usas HandshakeState como estado inicial de conexión
+      gameEngine.setState(new com.slingshot.core.states.HandshakeState());
     }
-    
+
     // 5. Mostramos la interfaz de inicio
     HomeWindow home = new HomeWindow(
         this::showLobby,
         this::showRules,
-        this::showControls
-    );
+        this::showControls);
     primaryStage.setScene(home.getScene());
     primaryStage.setTitle("Slingshot Battle - Inicio");
     primaryStage.centerOnScreen();

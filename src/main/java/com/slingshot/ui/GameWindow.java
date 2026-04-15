@@ -342,6 +342,8 @@ public class GameWindow {
               p.getY() > b.getY() && p.getY() < b.getY() + b.getHeight()) {
             b.takeDamage(p.getType());
             projectileDestroyed = true;
+
+            com.slingshot.core.SoundManager.getInstance().playExplosion();
             if (!b.isAlive())
               bIt.remove();
             break;
@@ -352,6 +354,7 @@ public class GameWindow {
       // Colisión con Jugador Local
       if (p.isEnemy() && localPlayer.checkHit(p.getX(), p.getY())) {
         localPlayer.takeDamage();
+        com.slingshot.core.SoundManager.getInstance().playExplosion();
         projectileDestroyed = true;
         engine.sendNetworkMessage("REWARD;SCORE;50");
       }
@@ -362,6 +365,7 @@ public class GameWindow {
           if (c.isAlive() && p.getX() > c.getX() && p.getX() < c.getX() + c.getSize() &&
               p.getY() > c.getY() && p.getY() < c.getY() + c.getSize()) {
             boolean destruyeBala = c.onHitByBullet(null, p);
+            com.slingshot.core.SoundManager.getInstance().playExplosion();
             if (destruyeBala)
               projectileDestroyed = true;
             enviarRecompensaRed(c);
@@ -419,6 +423,12 @@ public class GameWindow {
     Projectile p = new Projectile(localPlayer.getCenterX(), localPlayer.getCenterY(), localPlayer.getAngle(),
         currentWeapon, chargePower, isHost, false);
     activeProjectiles.add(p);
+    // ¡EFECTOS DE DISPARO!
+    if (currentWeapon.equals("sniper")) {
+      com.slingshot.core.SoundManager.getInstance().playSniper();
+    } else {
+      com.slingshot.core.SoundManager.getInstance().playArtillery();
+    }
   }
 
   private void render() {
