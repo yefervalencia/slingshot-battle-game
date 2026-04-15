@@ -222,16 +222,22 @@ public class GameWindow {
     });
 
     Button btnQuit = UIFactory.createMenuButton("ABANDONAR", "#e74c3c", () -> {
-      // 1. Avisar a la red
-      engine.sendNetworkMessage("PLAYER_QUIT_MATCH");
+      // 1. Avisar al rival por la red
+      engine.sendNetworkMessage("PLAYER_QUIT_GAME");
 
-      // 2. Detener el bucle del juego para que no consuma memoria en el menú
+      // 2. Detener el bucle de renderizado (crucial para liberar memoria)
       if (gameLoop != null)
         gameLoop.stop();
 
-      // 3. Volver al Home usando el callback
-      if (onExitToHome != null)
-        onExitToHome.run();
+      // 3. Mostrar mensaje y redirigir
+      CustomAlert.show("Partida Abandonada", "Te has retirado de la zona cero.", () -> {
+        // Usamos Platform.runLater para asegurar que el cambio de escena
+        // ocurra después de que se cierre el mensaje de alerta
+        Platform.runLater(() -> {
+          if (onExitToHome != null)
+            onExitToHome.run();
+        });
+      });
     });
 
     pauseMenuContainer.getChildren().addAll(lblTitle, lblWarning, new Label(""), btnResume, btnControls, btnPoints,
@@ -699,8 +705,10 @@ public class GameWindow {
         engine.sendNetworkMessage("REPLAY_RESPONSE;NO");
         if (gameLoop != null)
           gameLoop.stop();
-        if (onExitToHome != null)
-          onExitToHome.run();
+        Platform.runLater(() -> {
+          if (onExitToHome != null)
+            onExitToHome.run();
+        });
       });
 
       finContainer.getChildren().addAll(lblResultado, lblScore, new Label(""), btnReplay, btnExit);
